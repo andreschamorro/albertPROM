@@ -288,7 +288,7 @@ class AnnotationDataset(datasets.GeneratorBasedBuilder):
                     columns = attributes_list, dtype="string")
             exon_df.exon_number = exon_df.exon_number.astype("int")
             exon_df.drop('attributes', inplace=True, axis=1)
-            exon_bed12 = to_bed12(exon_df, num_processes=8)
+            exon_bed12 = to_bed12(exon_df, num_processes=32)
             exon_bed12.drop(exon_bed12[exon_bed12.start > exon_bed12.end].index, inplace=True)
             exon_bed12.to_csv(data_files['transcripts_bed'], sep='\t', header=False, index=False)
 

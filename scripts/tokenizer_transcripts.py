@@ -11,7 +11,7 @@ import sys
 sys.path.extend(['.', '..'])
 import datasets
 
-trans_data = datasets.load_dataset('../loaders/dataset_script.py', data_dir='data')
+trans_data = datasets.load_dataset('loaders/dataset_script.py', data_dir='run/data')
 trans_data = trans_data.shuffle(seed=42)
 trans_data = trans_data.map(lambda seq: {"feature": seq["feature"].upper()}, num_proc=4)
 
