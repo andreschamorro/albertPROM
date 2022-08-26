@@ -23,7 +23,7 @@ def main(k=17, vocab_size=10000, batch_size=1024):
             min_frequency=2,
             special_tokens=["<s>", "<pad>", "</s>", "<unk>", "<mask>",])
     
-    tokenizer.save_model("run/transcripts_bpe_tokenizer", "k17")
+    tokenizer.save_model("run/transcripts_bpe_tokenizer", f'k{k}.vs{vocab_size}')
 
 if __name__ == "__main__":
     main()
