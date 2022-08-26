@@ -37,5 +37,5 @@ tokenizer.train_from_iterator(
         show_progress=True,
         min_frequency=2, 
         special_tokens=["<s>", "<pad>", "</s>", "<unk>", "<mask>",])
-tokenizer.save_pretrained("transcripts_bpe_tokenizer")
+tokenizer.save_pretrained("run/transcripts_bpe_tokenizer")
 
