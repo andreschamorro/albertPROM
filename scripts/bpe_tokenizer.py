@@ -5,7 +5,7 @@ sys.path.extend(['.', '..'])
 import datasets
 from model.Tokenizer import KmerBPETokenizer
 
-def get_training_corpus():
+def get_training_corpus(trans_data, batch_size):
     for i in range(0, len(trans_data["train"]), batch_size):
         yield trans_data["train"][i : i + batch_size]["feature"]
 
@@ -17,13 +17,13 @@ def main(k=17, vocab_size=10000, batch_size=1024):
     tokenizer = KmerBPETokenizer(k=k)
     
     tokenizer.train_from_iterator(
-            get_training_corpus(),
+            get_training_corpus(trans_data, batch_size),
             vocab_size=vocab_size,
             show_progress=True,
             min_frequency=2,
             special_tokens=["<s>", "<pad>", "</s>", "<unk>", "<mask>",])
     
-    tokenizer.save_model("../run/transcripts_bpe_tokenizer", "k17")
+    tokenizer.save_model("run/transcripts_bpe_tokenizer", "k17")
 
 if __name__ == "__main__":
     main()
