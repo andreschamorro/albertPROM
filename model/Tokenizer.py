@@ -235,7 +235,7 @@ class KmerBPETokenizer(BaseTokenizer):
         merges: Optional[Union[str, Dict[Tuple[int, int], Tuple[int, int]]]] = None,
         add_prefix_space: bool = False,
         unknow_nucleotide: bool = True,
-        lowercase: bool = False,
+        lowercase: bool = True,
         dropout: Optional[float] = None,
         continuing_subword_prefix: Optional[str] = None,
         end_of_word_suffix: Optional[str] = None,

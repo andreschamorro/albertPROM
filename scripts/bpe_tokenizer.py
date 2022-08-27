@@ -2,6 +2,7 @@
 import sys
 # appending a path
 sys.path.extend(['.', '..'])
+from utils.mem import get_memory_peak
 import datasets
 from model.Tokenizer import KmerBPETokenizer
 
@@ -24,6 +25,7 @@ def main(k=17, vocab_size=10000, batch_size=1024):
             special_tokens=["<s>", "<pad>", "</s>", "<unk>", "<mask>",])
     
     tokenizer.save_model("run/transcripts_bpe_tokenizer", f'k{k}.vs{vocab_size}')
+    print("VMemory peak {}".format(get_memory_peak()))
 
 if __name__ == "__main__":
     main()
