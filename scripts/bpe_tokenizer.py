@@ -4,7 +4,7 @@ import sys
 sys.path.extend(['.', '..'])
 from utils.mem import get_memory_peak
 import datasets
-from model.Tokenizer import KmerBPETokenizer
+from model.tokenizer import KmerBPETokenizer
 
 def get_training_corpus(trans_data, batch_size):
     for i in range(0, len(trans_data["train"]), batch_size):

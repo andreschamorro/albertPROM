@@ -236,10 +236,9 @@ class KmerBPETokenizer(BaseTokenizer):
         add_prefix_space: bool = False,
         unknow_nucleotide: bool = True,
         lowercase: bool = True,
-        dropout: Optional[float] = None,
-        continuing_subword_prefix: Optional[str] = None,
-        end_of_word_suffix: Optional[str] = None,
         trim_offsets: bool = False,
+        max_length: int = 512,
+        **kwargs
     ):
         self.k =k
         if vocab is not None and merges is not None:
@@ -247,9 +246,7 @@ class KmerBPETokenizer(BaseTokenizer):
                 BPE(
                     vocab,
                     merges,
-                    dropout=dropout,
-                    continuing_subword_prefix=continuing_subword_prefix or "",
-                    end_of_word_suffix=end_of_word_suffix or "",
+                    **kwargs
                 )
             )
         else:
@@ -272,7 +269,7 @@ class KmerBPETokenizer(BaseTokenizer):
 
         tokenizer.pre_tokenizer = pre_tokenizers.Sequence([
             pre_tokenizers.PreTokenizer.custom(KmerPreTokenizer(self.k)),
-            pre_tokenizers.ByteLevel(add_prefix_space=False)])
+            pre_tokenizers.ByteLevel(add_prefix_space=add_prefix_space)])
         tokenizer.decoder = decoders.ByteLevel()
         tokenizer.post_processor = processors.ByteLevel(trim_offsets=trim_offsets)
 
@@ -282,13 +279,13 @@ class KmerBPETokenizer(BaseTokenizer):
             "add_prefix_space": add_prefix_space,
             "unknow_nucleotide": unknow_nucleotide,
             "lowercase": lowercase,
-            "dropout": dropout,
-            "continuing_subword_prefix": continuing_subword_prefix,
-            "end_of_word_suffix": end_of_word_suffix,
-            "trim_offsets": trim_offsets,
+            "trim_offsets": trim_offsets
         }
 
-        super().__init__(tokenizer, parameters)
+        super().__init__(tokenizer, parameters, **kwargs)
+
+    def enable_truncation(self, **kwargs):
+        return self._tokenizer.enable_truncation(**kwargs)
 
     def train(
         self,
