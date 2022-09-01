@@ -14,17 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-Fine-tuning the library models for causal language modeling (GPT-2, GPT-Neo...)
+Fine-tuning the library models for masked language modeling (BERT, ALBERT, RoBERTa...)
 on a text file or a dataset without using HuggingFace Trainer.
 
 Here is the full list of checkpoints on the hub that can be fine-tuned by this script:
-https://huggingface.co/models?filter=text-generation
+https://huggingface.co/models?filter=fill-mask
 """
-# You can also adapt this script on your own clm task. Pointers for this are left as comments.
+# You can also adapt this script on your own mlm task. Pointers for this are left as comments.
 
 import json
-
-# region Imports
 import logging
 import math
 import os
@@ -34,7 +32,6 @@ from dataclasses import dataclass, field
 from itertools import chain
 from pathlib import Path
 from typing import Optional
-from functools import partial
 
 import datasets
 import tensorflow as tf
@@ -46,18 +43,19 @@ from transformers import (
     CONFIG_MAPPING,
     CONFIG_NAME,
     TF2_WEIGHTS_NAME,
-    TF_MODEL_FOR_CAUSAL_LM_MAPPING,
+    TF_MODEL_FOR_MASKED_LM_MAPPING,
     AutoConfig,
     AutoTokenizer,
     PreTrainedTokenizerFast,
-    DefaultDataCollator,
+    DataCollatorForLanguageModeling,
     HfArgumentParser,
     PushToHubCallback,
-    TFAutoModelForCausalLM,
+    TFAutoModelForMaskedLM,
     TFTrainingArguments,
     create_optimizer,
     set_seed,
 )
+from transformers.utils import send_example_telemetry
 from transformers.utils.versions import require_version
 
 sys.path.extend(['.', '..'])
@@ -65,12 +63,35 @@ from model.tokenizer import KmerBPETokenizer
 
 logger = logging.getLogger(__name__)
 require_version("datasets>=1.8.0", "To fix: pip install -r examples/tensorflow/language-modeling/requirements.txt")
-MODEL_CONFIG_CLASSES = list(TF_MODEL_FOR_CAUSAL_LM_MAPPING.keys())
+MODEL_CONFIG_CLASSES = list(TF_MODEL_FOR_MASKED_LM_MAPPING.keys())
 MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
-DATASET_TYPES = {"trns": "loaders/dataset_script.py"}
+DATASET_TYPES = {"ngs": "loaders/ngs_script.py"}
 TOKENIZER_TYPES = {"bpe": KmerBPETokenizer}
-# endregion
+DEFAULT_READ_CONFIG = {'num_read': 0, 'x_fold': 5, 'len_r': 150, 'len_l': 150, 'std_dev': 50, 'dist': 500}
 
+def update_from_string(old: dict, update_str: str):
+    d = dict(x.split("=") for x in update_str.split(","))
+    for k, v in d.items():
+        if k not in old:
+            raise ValueError(f"key {k} isn't in the original config dict")
+            
+        old_v = old.get(k)
+        if isinstance(old_v, bool):
+            if v.lower() in ["true", "1", "y", "yes"]:
+                v = True
+            elif v.lower() in ["false", "0", "n", "no"]:
+                v = False
+            else:
+                raise ValueError(f"can't derive true or false from {v} (key {k})")
+        elif isinstance(old_v, int):
+            v = int(v)
+        elif isinstance(old_v, float):
+            v = float(v)
+        elif not isinstance(old_v, str):
+            raise ValueError(
+                f"You can only update int, float, bool or string values in the config, got {v} for key {k}"
+            )
+        old[k] = v
 
 # region Command-line arguments
 @dataclass
@@ -108,7 +129,15 @@ class ModelArguments:
         default=None, metadata={"help": "Pretrained config name or path if not the same as model_name"}
     )
     tokenizer_name: Optional[str] = field(
-        default="bpe", metadata={"help": "Pretrained tokenizer name or path if not the same as model_name"}
+        default=None, metadata={"help": "Pretrained tokenizer name or path if not the same as model_name"}
+    )
+    cache_dir: Optional[str] = field(
+        default=None,
+        metadata={"help": "Where do you want to store the pretrained models downloaded from huggingface.co"},
+    )
+    use_fast_tokenizer: bool = field(
+        default=True,
+        metadata={"help": "Whether to use one of the fast tokenizer (backed by the tokenizers library) or not."},
     )
     tokenizer_vocab: Optional[str] = field(
         default=None, metadata={"help": "Path to vocab file"}, 
@@ -122,10 +151,6 @@ class ModelArguments:
     cache_dir: Optional[str] = field(
         default=None,
         metadata={"help": "Where do you want to store the pretrained models downloaded from huggingface.co"},
-    )
-    use_fast_tokenizer: bool = field(
-        default=True,
-        metadata={"help": "Whether to use one of the fast tokenizer (backed by the tokenizers library) or not."},
     )
     model_revision: str = field(
         default="main",
@@ -155,7 +180,7 @@ class DataTrainingArguments:
     """
 
     dataset_name: Optional[str] = field(
-        default="trns", metadata={"help": "The path or name of the dataset to use (via the datasets library)."}
+        default=None, metadata={"help": "The name of the dataset to use (via the datasets library)."}
     )
     dataset_dir: Optional[str] = field(
         default=None, metadata={"help": "The data dir of the dataset configuration."}
@@ -163,10 +188,10 @@ class DataTrainingArguments:
     dataset_config_name: Optional[str] = field(
         default=None, metadata={"help": "The configuration name of the dataset to use (via the datasets library)."}
     )
-    train_file: Optional[str] = field(default=None, metadata={"help": "The input training data file (a fasta file)."})
+    train_file: Optional[str] = field(default=None, metadata={"help": "The input training data file (a text file)."})
     validation_file: Optional[str] = field(
         default=None,
-        metadata={"help": "An optional input evaluation data file to evaluate the perplexity on (a fasta file)."},
+        metadata={"help": "An optional input evaluation data file to evaluate the perplexity on (a text file)."},
     )
     overwrite_cache: bool = field(
         default=False, metadata={"help": "Overwrite the cached training and evaluation sets"}
@@ -191,6 +216,35 @@ class DataTrainingArguments:
         default=None,
         metadata={"help": "The number of processes to use for the preprocessing."},
     )
+    max_seq_length: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": (
+                "The maximum total input sequence length after tokenization. Sequences longer "
+                "than this will be truncated."
+            )
+        },
+    )
+    preprocessing_num_workers: Optional[int] = field(
+        default=None,
+        metadata={"help": "The number of processes to use for the preprocessing."},
+    )
+    mlm_probability: float = field(
+        default=0.15, metadata={"help": "Ratio of tokens to mask for masked language modeling loss"}
+    )
+    read_by_read: bool = field(
+        default=False,
+        metadata={"help": "Whether distinct lines of text in the dataset are to be handled as distinct sequences."},
+    )
+    pad_to_max_length: bool = field(
+        default=False,
+        metadata={
+            "help": (
+                "Whether to pad all samples to `max_seq_length`. "
+                "If False, will pad the samples dynamically when batching to the maximum length in the batch."
+            )
+        },
+    )
     max_train_samples: Optional[int] = field(
         default=None,
         metadata={
@@ -209,6 +263,15 @@ class DataTrainingArguments:
             )
         },
     )
+    dataset_overrides: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": (
+                "Override some existing default config settings when the dataset is load. Example: "
+                "x_fold=10,len_l=250"
+            )
+        },
+    )
 
     def __post_init__(self):
         if self.dataset_name is None and self.train_file is None and self.validation_file is None:
@@ -216,11 +279,14 @@ class DataTrainingArguments:
         else:
             if self.train_file is not None:
                 extension = self.train_file.split(".")[-1]
-                assert extension in ["csv", "json", "fasta"], "`train_file` should be a csv, a json or a fasta file."
+                assert extension in ["csv", "json", "txt"], "`train_file` should be a csv, a json or a txt file."
             if self.validation_file is not None:
                 extension = self.validation_file.split(".")[-1]
-                assert extension in ["csv", "json", "txt"], "`validation_file` should be a csv, a json or a fasta file."
+                assert extension in ["csv", "json", "txt"], "`validation_file` should be a csv, a json or a txt file."
+
+
 # endregion
+
 
 def main():
     # region Argument Parsing
@@ -234,7 +300,7 @@ def main():
 
     # Sending telemetry. Tracking the example usage helps us better allocate resources to maintain them. The
     # information sent is the one passed as arguments along with your Python/PyTorch versions.
-    # send_example_telemetry("run_clm", model_args, data_args, framework="tensorflow")
+    # send_example_telemetry("run_mlm", model_args, data_args, framework="tensorflow")
 
     # Sanity checks
     if data_args.dataset_name is None and data_args.train_file is None and data_args.validation_file is None:
@@ -250,6 +316,10 @@ def main():
     if training_args.output_dir is not None:
         training_args.output_dir = Path(training_args.output_dir)
         os.makedirs(training_args.output_dir, exist_ok=True)
+
+    if isinstance(training_args.strategy, tf.distribute.TPUStrategy) and not data_args.pad_to_max_length:
+        logger.warning("We are training on TPU - forcing pad_to_max_length")
+        data_args.pad_to_max_length = True
     # endregion
 
     # region Checkpoints
@@ -260,7 +330,7 @@ def main():
         weights_path = training_args.output_dir / TF2_WEIGHTS_NAME
         if config_path.is_file() and weights_path.is_file():
             checkpoint = training_args.output_dir
-            logger.info(
+            logger.warning(
                 f"Checkpoint detected, resuming training from checkpoint in {training_args.output_dir}. To avoid this"
                 " behavior, change the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
             )
@@ -284,8 +354,19 @@ def main():
         set_seed(training_args.seed)
 
     # region Load datasets
-    # See more about loading any type of standard or custom dataset (from files, python dict, pandas DataFrame, etc) at
-    # https://huggingface.co/docs/datasets/loading_datasets.html.
+    # Get the datasets: you can either provide your own CSV/JSON/TXT training and evaluation files (see below)
+    # or just provide the name of one of the public datasets available on the hub at https://huggingface.co/datasets/
+    # (the dataset will be downloaded automatically from the datasets Hub).
+    #
+    # For CSV/JSON files, this script will use the column called 'text' or the first column if no column called
+    # 'text' is found. You can easily tweak this behavior (see below).
+    #
+    # In distributed training, the load_dataset function guarantee that only one local process can concurrently
+    # download the dataset.
+    # TODO
+    # Agregate read generation configuration
+    if data_args.dataset_overrides is not None:
+        update_from_string(DEFAULT_READ_CONFIG, data_args.dataset_overrides)
     if data_args.dataset_name is not None:
         # Downloading and loading a dataset from the hub.
         raw_datasets = load_dataset(
@@ -294,8 +375,13 @@ def main():
             data_dir=data_args.dataset_dir,
             cache_dir=model_args.cache_dir,
             use_auth_token=True if model_args.use_auth_token else None,
-        )
+            **DEFAULT_READ_CONFIG,
+        ).shuffle()
         if "validation" not in raw_datasets.keys():
+            logger.info(
+                f"Validation key not found: using {data_args.validation_split_percentage}% of the dataset as validation"
+                " as provided in data_args"
+            )
             raw_datasets["validation"] = load_dataset(
                 DATASET_TYPES[data_args.dataset_name],
                 data_args.dataset_config_name,
@@ -303,6 +389,7 @@ def main():
                 data_dir=data_args.dataset_dir,
                 cache_dir=model_args.cache_dir,
                 use_auth_token=True if model_args.use_auth_token else None,
+                **DEFAULT_READ_CONFIG,
             )
             raw_datasets["train"] = load_dataset(
                 DATASET_TYPES[data_args.dataset_name],
@@ -311,6 +398,7 @@ def main():
                 data_dir=data_args.dataset_dir,
                 cache_dir=model_args.cache_dir,
                 use_auth_token=True if model_args.use_auth_token else None,
+                **DEFAULT_READ_CONFIG,
             )
     else:
         raise NotImplementedError
@@ -320,15 +408,15 @@ def main():
     #
     # In distributed training, the .from_pretrained methods guarantee that only one local process can concurrently
     # download model & vocab.
-    if model_args.config_name:
+    if checkpoint is not None:
+        config = AutoConfig.from_pretrained(checkpoint)
+    elif model_args.config_name:
         config = AutoConfig.from_pretrained(model_args.config_name)
     elif model_args.model_name_or_path:
         config = AutoConfig.from_pretrained(model_args.model_name_or_path)
     else:
         config = CONFIG_MAPPING[model_args.model_type]()
         logger.warning("You are instantiating a new config instance from scratch.")
-
-    config.max_position_embeddings = model_args.tokenizer_max_length + 2
 
     if model_args.tokenizer_name:
         try:
@@ -345,78 +433,113 @@ def main():
         )
 
     tokenizer.enable_truncation(max_length=model_args.tokenizer_max_length, direction='right')
-    fast_tokenizer = PreTrainedTokenizerFast(tokenizer_object=tokenizer, 
+    fast_tokenizer = PreTrainedTokenizerFast(
+            tokenizer_object=tokenizer, 
+            unk_token="[UNK]",
+            sep_token="[SEP]",
+            cls_token="[CLS]",
+            pad_token="[PAD]",
+            mask_token="[MASK]",
             model_max_length=model_args.tokenizer_max_length, truncation_side='right')
     # endregion
+
     # region Dataset preprocessing
     # First we tokenize all the texts.
     column_names = raw_datasets["train"].column_names
-    column_name = "sequence" if "sequence" in column_names else column_names[0]
-    # Log a few random samples from the training set:
+    reads_names = [col for col in column_names if col.startswith('read')]
 
-    def tokenizer_function(examples):
-        return fast_tokenizer(examples[column_name], 
-                truncation=True, max_length=model_args.tokenizer_max_length)
-
-    tokenized_datasets = raw_datasets.map(
-        function=tokenizer_function,
-        batched=True,
-        num_proc=data_args.preprocessing_num_workers,
-        remove_columns=column_names,
-        load_from_cache_file=not data_args.overwrite_cache,
-        desc="Running tokenizer on dataset",
-    )
-
-    if data_args.block_size is None:
-        block_size = fast_tokenizer.model_max_length
-        if block_size > 1024:
+    if data_args.max_seq_length is None:
+        max_seq_length = fast_tokenizer.model_max_length
+        if max_seq_length > 1024:
             logger.warning(
-                f"The tokenizer picked seems to have a very large `model_max_length` ({fast_tokenizer.model_max_length}). "
-                "Picking 1024 instead. You can change that default value by passing --block_size xxx."
+                f"The tokenizer picked seems to have a very large `model_max_length` ({tokenizer.model_max_length}). "
+                "Picking 1024 instead. You can reduce that default value by passing --max_seq_length xxx."
             )
-            block_size = 1024 
+            max_seq_length = 1024
     else:
-        if data_args.block_size > fast_tokenizer.model_max_length:
+        if data_args.max_seq_length > tokenizer.model_max_length:
             logger.warning(
-                f"The block_size passed ({data_args.block_size}) is larger than the maximum length for the model"
-                f"({fast_tokenizer.model_max_length}). Using block_size={fast_tokenizer.model_max_length}."
+                f"The max_seq_length passed ({data_args.max_seq_length}) is larger than the maximum length for the"
+                f"model ({tokenizer.model_max_length}). Using max_seq_length={tokenizer.model_max_length}."
             )
-        block_size = min(data_args.block_size, fast_tokenizer.model_max_length)
+        max_seq_length = min(data_args.max_seq_length, tokenizer.model_max_length)
 
-    # Main data processing function that will concatenate all texts from our dataset and generate chunks of block_size.
-    def group_texts(examples):
-        # Concatenate all texts.
-        concatenated_examples = {k: list(chain(*examples[k])) for k in examples.keys()}
-        total_length = len(concatenated_examples[list(examples.keys())[0]])
-        # We drop the small remainder, we could add padding if the model supported it instead of this drop, you can
-        # customize this part to your needs.
-        if total_length >= block_size:
-            total_length = (total_length // block_size) * block_size
-        # Split by chunks of max_len.
-        result = {
-            k: [t[i : i + block_size] for i in range(0, total_length, block_size)]
-            for k, t in concatenated_examples.items()
-        }
-        result["labels"] = result["input_ids"].copy()
-        return result
+    if data_args.read_by_read:
+        # When using read_by_read, we just tokenize each nonempty line.
+        padding = "max_length" if data_args.pad_to_max_length else False
 
-    # Note that with `batched=True`, this map processes 1,000 texts together, so group_texts throws away a remainder
-    # for each of those groups of 1,000 texts. You can adjust that batch_size here but a higher value might be slower
-    # to preprocess.
-    #
-    # To speed up this part, we use multiprocessing. See the documentation of the map method for more information:
-    # https://huggingface.co/docs/datasets/package_reference/main_classes.html#datasets.Dataset.map
+        def tokenize_function(examples):
+            examples[column_name] = [
+                examples[read_name] for read_name in reads_names
+            ]
+            return fast_tokenizer(
+                examples[column_name],
+                padding=padding,
+                truncation=True,
+                max_length=max_seq_length,
+                # We use this option because DataCollatorForLanguageModeling (see below) is more efficient when it
+                # receives the `special_tokens_mask`.
+                return_special_tokens_mask=True,
+            )
 
-    lm_datasets = tokenized_datasets.map(
-        group_texts,
-        batched=True,
-        num_proc=data_args.preprocessing_num_workers,
-        load_from_cache_file=not data_args.overwrite_cache,
-        desc=f"Grouping texts in chunks of {block_size}",
-    )
+        tokenized_datasets = raw_datasets.map(
+            tokenize_function,
+            batched=True,
+            num_proc=data_args.preprocessing_num_workers,
+            remove_columns=reads_names,
+            load_from_cache_file=not data_args.overwrite_cache,
+            desc="Running tokenizer on dataset read_by_read",
+        )
+    else:
+        # Otherwise, we tokenize every text, then concatenate them together before splitting them in smaller parts.
+        # We use `return_special_tokens_mask=True` because DataCollatorForLanguageModeling (see below) is more
+        # efficient when it receives the `special_tokens_mask`.
+        def tokenize_function(examples):
+            return fast_tokenizer([''.join(z) for z in zip(*[examples[rn] for rn in reads_names])], return_special_tokens_mask=True)
 
-    train_dataset = lm_datasets["train"]
-    eval_dataset = lm_datasets["validation"]
+        tokenized_datasets = raw_datasets.map(
+            tokenize_function,
+            batched=True,
+            num_proc=data_args.preprocessing_num_workers,
+            remove_columns=column_names,
+            load_from_cache_file=not data_args.overwrite_cache,
+            desc="Running tokenizer on every pairs in dataset",
+        )
+
+        # Main data processing function that will concatenate all texts from our dataset and generate chunks of
+        # max_seq_length.
+        def group_texts(examples):
+            # Concatenate all texts.
+            concatenated_examples = {k: list(chain(*examples[k])) for k in examples.keys()}
+            total_length = len(concatenated_examples[list(examples.keys())[0]])
+            # We drop the small remainder, we could add padding if the model supported it instead of this drop, you can
+            # customize this part to your needs.
+            if total_length >= max_seq_length:
+                total_length = (total_length // max_seq_length) * max_seq_length
+            # Split by chunks of max_len.
+            result = {
+                k: [t[i : i + max_seq_length] for i in range(0, total_length, max_seq_length)]
+                for k, t in concatenated_examples.items()
+            }
+            return result
+
+        # Note that with `batched=True`, this map processes 1,000 texts together, so group_texts throws away a
+        # remainder for each of those groups of 1,000 texts. You can adjust that batch_size here but a higher value
+        # might be slower to preprocess.
+        #
+        # To speed up this part, we use multiprocessing. See the documentation of the map method for more information:
+        # https://huggingface.co/docs/datasets/package_reference/main_classes.html#datasets.Dataset.map
+
+        tokenized_datasets = tokenized_datasets.map(
+            group_texts,
+            batched=True,
+            num_proc=data_args.preprocessing_num_workers,
+            load_from_cache_file=not data_args.overwrite_cache,
+            desc=f"Grouping texts in chunks of {max_seq_length}",
+        )
+
+    train_dataset = tokenized_datasets["train"]
+    eval_dataset = tokenized_datasets["validation"]
 
     if data_args.max_train_samples is not None:
         max_train_samples = min(len(train_dataset), data_args.max_train_samples)
@@ -433,18 +556,21 @@ def main():
     with training_args.strategy.scope():
         # region Prepare model
         if checkpoint is not None:
-            model = TFAutoModelForCausalLM.from_pretrained(checkpoint, config=config)
+            model = TFAutoModelForMaskedLM.from_pretrained(checkpoint, config=config)
         elif model_args.model_name_or_path:
-            model = TFAutoModelForCausalLM.from_pretrained(model_args.model_name_or_path, config=config)
+            model = TFAutoModelForMaskedLM.from_pretrained(model_args.model_name_or_path, config=config)
         else:
             logger.info("Training new model from scratch")
-            model = TFAutoModelForCausalLM.from_config(config)
+            model = TFAutoModelForMaskedLM.from_config(config)
 
-        model.resize_token_embeddings(tokenizer.get_vocab_size(with_added_tokens=True))
+        model.resize_token_embeddings(len(fast_tokenizer))
         # endregion
 
         # region TF Dataset preparation
         num_replicas = training_args.strategy.num_replicas_in_sync
+        data_collator = DataCollatorForLanguageModeling(
+            tokenizer=fast_tokenizer, mlm_probability=data_args.mlm_probability, return_tensors="tf"
+        )
         options = tf.data.Options()
         options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.OFF
 
@@ -456,8 +582,6 @@ def main():
         # For more info see the docs:
         # https://huggingface.co/docs/transformers/main/en/main_classes/model#transformers.TFPreTrainedModel.prepare_tf_dataset
         # https://huggingface.co/docs/datasets/main/en/package_reference/main_classes#datasets.Dataset.to_tf_dataset
-
-        data_collator = DefaultDataCollator(return_tensors="tf")
 
         tf_train_dataset = model.prepare_tf_dataset(
             train_dataset,
@@ -497,7 +621,7 @@ def main():
         )
 
         # no user-specified loss = will use the model internal loss
-        model.compile(optimizer=optimizer, jit_compile=training_args.xla)
+        model.compile(optimizer=optimizer, jit_compile=training_args.xla, run_eagerly=True)
         # endregion
 
         # region Preparing push_to_hub and model card
@@ -510,9 +634,9 @@ def main():
             if data_args.dataset_name is not None:
                 push_to_hub_model_id = f"{model_name}-finetuned-{data_args.dataset_name}"
             else:
-                push_to_hub_model_id = f"{model_name}-finetuned-clm"
+                push_to_hub_model_id = f"{model_name}-finetuned-mlm"
 
-        model_card_kwargs = {"finetuned_from": model_name, "tasks": "text-generation"}
+        model_card_kwargs = {"finetuned_from": model_args.model_name_or_path, "tasks": "fill-mask"}
         if data_args.dataset_name is not None:
             model_card_kwargs["dataset_tags"] = data_args.dataset_name
             if data_args.dataset_config_name is not None:
@@ -571,23 +695,24 @@ def main():
             train_perplexity = math.inf
         logger.info(f"  Final train loss: {train_loss:.3f}")
         logger.info(f"  Final train perplexity: {train_perplexity:.3f}")
-        validation_loss = history.history["val_loss"][-1]
-        try:
-            validation_perplexity = math.exp(validation_loss)
-        except OverflowError:
-            validation_perplexity = math.inf
-        logger.info(f"  Final validation loss: {validation_loss:.3f}")
-        logger.info(f"  Final validation perplexity: {validation_perplexity:.3f}")
 
-        if training_args.output_dir is not None:
-            output_eval_file = os.path.join(training_args.output_dir, "all_results.json")
-            results_dict = dict()
-            results_dict["train_loss"] = train_loss
-            results_dict["train_perplexity"] = train_perplexity
-            results_dict["eval_loss"] = validation_loss
-            results_dict["eval_perplexity"] = validation_perplexity
-            with open(output_eval_file, "w") as writer:
-                writer.write(json.dumps(results_dict))
+    validation_loss = history.history["val_loss"][-1]
+    try:
+        validation_perplexity = math.exp(validation_loss)
+    except OverflowError:
+        validation_perplexity = math.inf
+    logger.info(f"  Final validation loss: {validation_loss:.3f}")
+    logger.info(f"  Final validation perplexity: {validation_perplexity:.3f}")
+
+    if training_args.output_dir is not None:
+        output_eval_file = os.path.join(training_args.output_dir, "all_results.json")
+        results_dict = dict()
+        results_dict["train_loss"] = train_loss
+        results_dict["train_perplexity"] = train_perplexity
+        results_dict["eval_loss"] = validation_loss
+        results_dict["eval_perplexity"] = validation_perplexity
+        with open(output_eval_file, "w") as writer:
+            writer.write(json.dumps(results_dict))
         # endregion
 
     if training_args.output_dir is not None and not training_args.push_to_hub:

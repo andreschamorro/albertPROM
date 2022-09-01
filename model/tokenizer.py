@@ -234,6 +234,11 @@ class KmerBPETokenizer(BaseTokenizer):
         vocab: Optional[Union[str, Dict[str, int]]] = None,
         merges: Optional[Union[str, Dict[Tuple[int, int], Tuple[int, int]]]] = None,
         add_prefix_space: bool = False,
+        unk_token: Union[str, AddedToken] = "[UNK]",
+        sep_token: Union[str, AddedToken] = "[SEP]",
+        cls_token: Union[str, AddedToken] = "[CLS]",
+        pad_token: Union[str, AddedToken] = "[PAD]",
+        mask_token: Union[str, AddedToken] = "[MASK]",
         unknow_nucleotide: bool = True,
         lowercase: bool = True,
         trim_offsets: bool = False,
@@ -246,11 +251,24 @@ class KmerBPETokenizer(BaseTokenizer):
                 BPE(
                     vocab,
                     merges,
+                    unk_token=unk_token,
                     **kwargs
                 )
             )
         else:
             tokenizer = Tokenizer(BPE())
+
+        # Let the tokenizer know about special tokens if they are part of the vocab
+        if tokenizer.token_to_id(str(unk_token)) is None:
+            tokenizer.add_tokens([str(unk_token)])
+        if tokenizer.token_to_id(str(sep_token)) is None:
+            tokenizer.add_tokens([str(sep_token)])
+        if tokenizer.token_to_id(str(cls_token)) is None:
+            tokenizer.add_tokens([str(cls_token)])
+        if tokenizer.token_to_id(str(pad_token)) is None:
+            tokenizer.add_tokens([str(pad_token)])
+        if tokenizer.token_to_id(str(mask_token)) is None:
+            tokenizer.add_tokens([str(mask_token)])
 
         normalizers = []
 
@@ -276,6 +294,11 @@ class KmerBPETokenizer(BaseTokenizer):
         parameters = {
             "model": "ByteLevelBPE",
             "k": k,
+            "unk_token": unk_token,
+            "sep_token": sep_token,
+            "cls_token": cls_token,
+            "pad_token": pad_token,
+            "mask_token": mask_token,
             "add_prefix_space": add_prefix_space,
             "unknow_nucleotide": unknow_nucleotide,
             "lowercase": lowercase,
@@ -293,7 +316,13 @@ class KmerBPETokenizer(BaseTokenizer):
         vocab_size: int = 30000,
         min_frequency: int = 2,
         show_progress: bool = True,
-        special_tokens: List[Union[str, AddedToken]] = [],
+        special_tokens: List[Union[str, AddedToken]] = [
+            "[PAD]",
+            "[UNK]",
+            "[CLS]",
+            "[SEP]",
+            "[MASK]",
+        ],
     ):
         """ Train the model using the given files """
 
@@ -314,7 +343,13 @@ class KmerBPETokenizer(BaseTokenizer):
         vocab_size: int = 30000,
         min_frequency: int = 2,
         show_progress: bool = True,
-        special_tokens: List[Union[str, AddedToken]] = [],
+        special_tokens: List[Union[str, AddedToken]] = [
+            "[PAD]",
+            "[UNK]",
+            "[CLS]",
+            "[SEP]",
+            "[MASK]",
+        ],
         length: Optional[int] = None,
     ):
         """ Train the model using the given iterator """
