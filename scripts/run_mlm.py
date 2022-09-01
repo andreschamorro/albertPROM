@@ -461,7 +461,7 @@ def main():
     # region Dataset preprocessing
     # First we tokenize all the texts.
     column_names = raw_datasets["train"].column_names
-    if data_args.dataset_name is "ngs":
+    if data_args.dataset_name == "ngs":
         features_names = [col for col in column_names if col.startswith('read')]
     else:
         features_names = ["sequence"] if "sequence" in column_names else [column_names[0]]
@@ -481,6 +481,8 @@ def main():
                 f"model ({tokenizer.model_max_length}). Using max_seq_length={tokenizer.model_max_length}."
             )
         max_seq_length = min(data_args.max_seq_length, tokenizer.model_max_length)
+    
+    config.max_position_embeddings = max_seq_length 
 
     if data_args.read_by_read:
         # TODO group for reads > max_length
