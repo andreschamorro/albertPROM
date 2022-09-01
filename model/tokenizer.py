@@ -366,3 +366,143 @@ class KmerBPETokenizer(BaseTokenizer):
             trainer=trainer,
             length=length,
         )
+
+class DNABPETokenizer(BaseTokenizer):
+    """ByteLevelBPETokenizer
+
+    Represents a Byte-level BPE as introduced by OpenAI with their GPT-2 model
+    """
+
+    def __init__(
+        self,
+        vocab: Optional[Union[str, Dict[str, int]]] = None,
+        merges: Optional[Union[str, Dict[Tuple[int, int], Tuple[int, int]]]] = None,
+        add_prefix_space: bool = False,
+        unk_token: Union[str, AddedToken] = "[UNK]",
+        sep_token: Union[str, AddedToken] = "[SEP]",
+        cls_token: Union[str, AddedToken] = "[CLS]",
+        pad_token: Union[str, AddedToken] = "[PAD]",
+        mask_token: Union[str, AddedToken] = "[MASK]",
+        unknow_nucleotide: bool = True,
+        lowercase: bool = True,
+        trim_offsets: bool = False,
+        max_length: int = 512,
+        **kwargs
+    ):
+        if vocab is not None and merges is not None:
+            tokenizer = Tokenizer(
+                BPE(
+                    vocab,
+                    merges,
+                    unk_token=unk_token,
+                    **kwargs
+                )
+            )
+        else:
+            tokenizer = Tokenizer(BPE())
+
+        # Let the tokenizer know about special tokens if they are part of the vocab
+        if tokenizer.token_to_id(str(unk_token)) is None:
+            tokenizer.add_tokens([str(unk_token)])
+        if tokenizer.token_to_id(str(sep_token)) is None:
+            tokenizer.add_tokens([str(sep_token)])
+        if tokenizer.token_to_id(str(cls_token)) is None:
+            tokenizer.add_tokens([str(cls_token)])
+        if tokenizer.token_to_id(str(pad_token)) is None:
+            tokenizer.add_tokens([str(pad_token)])
+        if tokenizer.token_to_id(str(mask_token)) is None:
+            tokenizer.add_tokens([str(mask_token)])
+
+        normalizers = []
+
+        if unknow_nucleotide:
+            normalizers += [Replace(r'[^ACTG]', '')]
+
+        if lowercase:
+            normalizers += [Lowercase()]
+
+        # Create the normalizer structure
+        if len(normalizers) > 0:
+            if len(normalizers) > 1:
+                tokenizer.normalizer = Sequence(normalizers)
+            else:
+                tokenizer.normalizer = normalizers[0]
+
+        tokenizer.pre_tokenizer = pre_tokenizers.ByteLevel(add_prefix_space=add_prefix_space)
+        tokenizer.decoder = decoders.ByteLevel()
+        tokenizer.post_processor = processors.ByteLevel(trim_offsets=trim_offsets)
+
+        parameters = {
+            "model": "ByteLevelBPE",
+            "unk_token": unk_token,
+            "sep_token": sep_token,
+            "cls_token": cls_token,
+            "pad_token": pad_token,
+            "mask_token": mask_token,
+            "add_prefix_space": add_prefix_space,
+            "unknow_nucleotide": unknow_nucleotide,
+            "lowercase": lowercase,
+            "trim_offsets": trim_offsets
+        }
+
+        super().__init__(tokenizer, parameters, **kwargs)
+
+    def enable_truncation(self, **kwargs):
+        return self._tokenizer.enable_truncation(**kwargs)
+
+    def train(
+        self,
+        files: Union[str, List[str]],
+        vocab_size: int = 30000,
+        min_frequency: int = 2,
+        show_progress: bool = True,
+        special_tokens: List[Union[str, AddedToken]] = [
+            "[PAD]",
+            "[UNK]",
+            "[CLS]",
+            "[SEP]",
+            "[MASK]",
+        ],
+    ):
+        """ Train the model using the given files """
+
+        trainer = trainers.BpeTrainer(
+            vocab_size=vocab_size,
+            min_frequency=min_frequency,
+            show_progress=show_progress,
+            special_tokens=special_tokens,
+            initial_alphabet=pre_tokenizers.ByteLevel.alphabet(),
+        )
+        if isinstance(files, str):
+            files = [files]
+        self._tokenizer.train(files, trainer=trainer)
+
+    def train_from_iterator(
+        self,
+        iterator: Union[Iterator[str], Iterator[Iterator[str]]],
+        vocab_size: int = 30000,
+        min_frequency: int = 2,
+        show_progress: bool = True,
+        special_tokens: List[Union[str, AddedToken]] = [
+            "[PAD]",
+            "[UNK]",
+            "[CLS]",
+            "[SEP]",
+            "[MASK]",
+        ],
+        length: Optional[int] = None,
+    ):
+        """ Train the model using the given iterator """
+
+        trainer = trainers.BpeTrainer(
+            vocab_size=vocab_size,
+            min_frequency=min_frequency,
+            show_progress=show_progress,
+            special_tokens=special_tokens,
+            initial_alphabet=pre_tokenizers.ByteLevel.alphabet(),
+        )
+        self._tokenizer.train_from_iterator(
+            iterator,
+            trainer=trainer,
+            length=length,
+        )

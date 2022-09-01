@@ -58,16 +58,19 @@ from transformers import (
 from transformers.utils import send_example_telemetry
 from transformers.utils.versions import require_version
 
+from typing import List
+
 sys.path.extend(['.', '..'])
-from model.tokenizer import KmerBPETokenizer
+from model.tokenizer import KmerBPETokenizer, DNABPETokenizer
 
 logger = logging.getLogger(__name__)
 require_version("datasets>=1.8.0", "To fix: pip install -r examples/tensorflow/language-modeling/requirements.txt")
 MODEL_CONFIG_CLASSES = list(TF_MODEL_FOR_MASKED_LM_MAPPING.keys())
 MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
-DATASET_TYPES = {"ngs": "loaders/ngs_script.py"}
-TOKENIZER_TYPES = {"bpe": KmerBPETokenizer}
-DEFAULT_READ_CONFIG = {'num_read': 0, 'x_fold': 5, 'len_r': 150, 'len_l': 150, 'std_dev': 50, 'dist': 500}
+DATASET_TYPES = {"ngs": "loaders/ngs_script.py", "wtr": "loaders/trns_script.py"}
+TOKENIZER_TYPES = {"kbpe": KmerBPETokenizer, "bpe": DNABPETokenizer}
+SPECIAL_DATASET_CONFIG = {
+        "ngs": {'num_read': 0, 'x_fold': 5, 'len_r': 150, 'len_l': 150, 'std_dev': 50, 'dist': 500}}
 
 def update_from_string(old: dict, update_str: str):
     d = dict(x.split("=") for x in update_str.split(","))
@@ -92,6 +95,9 @@ def update_from_string(old: dict, update_str: str):
                 f"You can only update int, float, bool or string values in the config, got {v} for key {k}"
             )
         old[k] = v
+
+def _kmer_split(k: int, sequence: str) -> List[str]:
+        return [sequence[j: j + k] for j in range(len(sequence) - k + 1)]
 
 # region Command-line arguments
 @dataclass
@@ -345,6 +351,10 @@ def main():
     # region Setup logging
     # accelerator.is_local_main_process is only True for one process per machine.
     logger.setLevel(logging.INFO)
+    os.makedirs(f'{training_args.logging_dir}', exist_ok=True)
+    fh = logging.FileHandler(os.path.join(training_args.logging_dir, 'run_mlm.log'))
+    fh.setLevel(logging.INFO)
+    logger.addHandler(fh)
     datasets.utils.logging.set_verbosity_warning()
     transformers.utils.logging.set_verbosity_info()
     # endregion
@@ -365,8 +375,9 @@ def main():
     # download the dataset.
     # TODO
     # Agregate read generation configuration
+    dataset_script_config = SPECIAL_DATASET_CONFIG.get(data_args.dataset_config_name, {})
     if data_args.dataset_overrides is not None:
-        update_from_string(DEFAULT_READ_CONFIG, data_args.dataset_overrides)
+        update_from_string(dataset_script_config, data_args.dataset_overrides)
     if data_args.dataset_name is not None:
         # Downloading and loading a dataset from the hub.
         raw_datasets = load_dataset(
@@ -375,7 +386,7 @@ def main():
             data_dir=data_args.dataset_dir,
             cache_dir=model_args.cache_dir,
             use_auth_token=True if model_args.use_auth_token else None,
-            **DEFAULT_READ_CONFIG,
+            **dataset_script_config,
         ).shuffle()
         if "validation" not in raw_datasets.keys():
             logger.info(
@@ -389,7 +400,7 @@ def main():
                 data_dir=data_args.dataset_dir,
                 cache_dir=model_args.cache_dir,
                 use_auth_token=True if model_args.use_auth_token else None,
-                **DEFAULT_READ_CONFIG,
+                **dataset_script_config,
             )
             raw_datasets["train"] = load_dataset(
                 DATASET_TYPES[data_args.dataset_name],
@@ -398,7 +409,7 @@ def main():
                 data_dir=data_args.dataset_dir,
                 cache_dir=model_args.cache_dir,
                 use_auth_token=True if model_args.use_auth_token else None,
-                **DEFAULT_READ_CONFIG,
+                **dataset_script_config,
             )
     else:
         raise NotImplementedError
@@ -420,10 +431,15 @@ def main():
 
     if model_args.tokenizer_name:
         try:
-            tokenizer = TOKENIZER_TYPES[model_args.tokenizer_name](
-                    model_args.model_ksize, 
-                    model_args.tokenizer_vocab, 
-                    model_args.tokenizer_merges)
+            if model_args.tokenizer_name.startswith('k'):
+                tokenizer = TOKENIZER_TYPES[model_args.tokenizer_name](
+                        model_args.model_ksize, 
+                        model_args.tokenizer_vocab, 
+                        model_args.tokenizer_merges)
+            else:
+                tokenizer = TOKENIZER_TYPES[model_args.tokenizer_name](
+                        model_args.tokenizer_vocab, 
+                        model_args.tokenizer_merges)
         except KeyError:
             print("Tokenizer name no implemented yet")
     else:
@@ -432,7 +448,6 @@ def main():
             "You can do it from another script, save it, and load it from here, using --tokenizer_name."
         )
 
-    tokenizer.enable_truncation(max_length=model_args.tokenizer_max_length, direction='right')
     fast_tokenizer = PreTrainedTokenizerFast(
             tokenizer_object=tokenizer, 
             unk_token="[UNK]",
@@ -446,7 +461,10 @@ def main():
     # region Dataset preprocessing
     # First we tokenize all the texts.
     column_names = raw_datasets["train"].column_names
-    reads_names = [col for col in column_names if col.startswith('read')]
+    if data_args.dataset_name is "ngs":
+        features_names = [col for col in column_names if col.startswith('read')]
+    else:
+        features_names = ["sequence"] if "sequence" in column_names else [column_names[0]]
 
     if data_args.max_seq_length is None:
         max_seq_length = fast_tokenizer.model_max_length
@@ -465,12 +483,13 @@ def main():
         max_seq_length = min(data_args.max_seq_length, tokenizer.model_max_length)
 
     if data_args.read_by_read:
+        # TODO group for reads > max_length
         # When using read_by_read, we just tokenize each nonempty line.
         padding = "max_length" if data_args.pad_to_max_length else False
 
         def tokenize_function(examples):
             examples[column_name] = [
-                examples[read_name] for read_name in reads_names
+                examples[read_name] for read_name in features_names
             ]
             return fast_tokenizer(
                 examples[column_name],
@@ -486,7 +505,7 @@ def main():
             tokenize_function,
             batched=True,
             num_proc=data_args.preprocessing_num_workers,
-            remove_columns=reads_names,
+            remove_columns=features_names,
             load_from_cache_file=not data_args.overwrite_cache,
             desc="Running tokenizer on dataset read_by_read",
         )
@@ -495,7 +514,8 @@ def main():
         # We use `return_special_tokens_mask=True` because DataCollatorForLanguageModeling (see below) is more
         # efficient when it receives the `special_tokens_mask`.
         def tokenize_function(examples):
-            return fast_tokenizer([''.join(z) for z in zip(*[examples[rn] for rn in reads_names])], return_special_tokens_mask=True)
+            kmer_example = [' '.join(_kmer_split(model_args.model_ksize, ''.join(z))) for z in zip(*[examples[fn] for fn in features_names])]
+            return fast_tokenizer(kmer_example, return_special_tokens_mask=True)
 
         tokenized_datasets = raw_datasets.map(
             tokenize_function,
