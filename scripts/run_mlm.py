@@ -440,14 +440,14 @@ def main():
                 tokenizer = TOKENIZER_TYPES[model_args.tokenizer_name](
                         model_args.tokenizer_vocab, 
                         model_args.tokenizer_merges)
-             tokenizer = PreTrainedTokenizerFast(
-                     tokenizer_object=tokenizer, 
-                     unk_token="[UNK]",
-                     sep_token="[SEP]",
-                     cls_token="[CLS]",
-                     pad_token="[PAD]",
-                     mask_token="[MASK]",
-                     model_max_length=model_args.tokenizer_max_length, truncation_side='right')
+            tokenizer = PreTrainedTokenizerFast(
+                    tokenizer_object=tokenizer,
+                    unk_token="[UNK]",
+                    sep_token="[SEP]",
+                    cls_token="[CLS]",
+                    pad_token="[PAD]",
+                    mask_token="[MASK]",
+                    model_max_length=model_args.tokenizer_max_length, truncation_side='right')
         except KeyError:
             tokenizer = AutoTokenizer.from_pretrained(model_args.tokenizer_name)
         else:
@@ -532,8 +532,8 @@ def main():
 
         # Log a few random samples from the training set:
         for index in random.sample(range(len(tokenized_datasets)), min(3, len(tokenized_datasets))):
-            logger.info(f"Sample {index} of the training set: {raw_datasets[index]}.")
-            logger.info(f"Sample {index} of the training set: {tokenized_datasets[index]}.")
+            logger.info(f"Sample {index} of the training set: {raw_datasets['train'][index]['sequence']}.")
+            logger.info(f"Sample {index} of the training set: {tokenized_datasets['train'][index]}.")
         # Main data processing function that will concatenate all texts from our dataset and generate chunks of
         # max_seq_length.
         def group_texts(examples):
