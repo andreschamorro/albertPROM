@@ -53,7 +53,7 @@ def main():
         lowercase=True,
     )
     
-    trans_data = datasets.load_dataset(DATASET_TYPES[args.dataset], args.dataset_config_name, data_dir=args.data_dir)
+    trans_data = datasets.load_dataset(DATASET_TYPES[args.dataset], args.dataset_config_name, data_dir=args.dataset_dir)
     trans_data = trans_data.shuffle(seed=42)
 
     # And then train
