@@ -23,6 +23,7 @@ https://huggingface.co/models?filter=fill-mask
 # You can also adapt this script on your own mlm task. Pointers for this are left as comments.
 
 import json
+import pickle
 import logging
 import math
 import os
