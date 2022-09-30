@@ -440,7 +440,17 @@ def main():
                 tokenizer = TOKENIZER_TYPES[model_args.tokenizer_name](
                         model_args.tokenizer_vocab, 
                         model_args.tokenizer_merges)
+                tokenizer = PreTrainedTokenizerFast(
+                        tokenizer_object=tokenizer, 
+                        unk_token="[UNK]",
+                        sep_token="[SEP]",
+                        cls_token="[CLS]",
+                        pad_token="[PAD]",
+                        mask_token="[MASK]",
+                        model_max_length=model_args.tokenizer_max_length, truncation_side='right')
         except KeyError:
+            tokenizer = AutoTokenizer.from_pretrained(model_args.tokenizer_name)
+        else:
             print("Tokenizer name no implemented yet")
     else:
         raise ValueError(
@@ -448,14 +458,6 @@ def main():
             "You can do it from another script, save it, and load it from here, using --tokenizer_name."
         )
 
-    fast_tokenizer = PreTrainedTokenizerFast(
-            tokenizer_object=tokenizer, 
-            unk_token="[UNK]",
-            sep_token="[SEP]",
-            cls_token="[CLS]",
-            pad_token="[PAD]",
-            mask_token="[MASK]",
-            model_max_length=model_args.tokenizer_max_length, truncation_side='right')
     # endregion
 
     # region Dataset preprocessing
@@ -467,7 +469,7 @@ def main():
         features_names = ["sequence"] if "sequence" in column_names else [column_names[0]]
 
     if data_args.max_seq_length is None:
-        max_seq_length = fast_tokenizer.model_max_length
+        max_seq_length = tokenizer.model_max_length
         if max_seq_length > 1024:
             logger.warning(
                 f"The tokenizer picked seems to have a very large `model_max_length` ({tokenizer.model_max_length}). "
@@ -493,7 +495,7 @@ def main():
             examples[column_name] = [
                 examples[read_name] for read_name in features_names
             ]
-            return fast_tokenizer(
+            return tokenizer(
                 examples[column_name],
                 padding=padding,
                 truncation=True,
@@ -516,8 +518,8 @@ def main():
         # We use `return_special_tokens_mask=True` because DataCollatorForLanguageModeling (see below) is more
         # efficient when it receives the `special_tokens_mask`.
         def tokenize_function(examples):
-            kmer_example = [' '.join(_kmer_split(model_args.model_ksize, ''.join(z))) for z in zip(*[examples[fn] for fn in features_names])]
-            return fast_tokenizer(kmer_example, return_special_tokens_mask=True)
+            kmer_example = [" ".join(_kmer_split(model_args.model_ksize, "".join(z))) for z in zip(*[examples[fn] for fn in features_names])]
+            return tokenizer(kmer_example, return_special_tokens_mask=True)
 
         tokenized_datasets = raw_datasets.map(
             tokenize_function,
@@ -528,6 +530,10 @@ def main():
             desc="Running tokenizer on every pairs in dataset",
         )
 
+        # Log a few random samples from the training set:
+        for index in random.sample(range(len(train_dataset)), min(3, len(tokenized_datasets))):
+            logger.info(f"Sample {index} of the training set: {raw_datasets[index]}.")
+            logger.info(f"Sample {index} of the training set: {tokenized_datasets[index]}.")
         # Main data processing function that will concatenate all texts from our dataset and generate chunks of
         # max_seq_length.
         def group_texts(examples):
@@ -585,13 +591,13 @@ def main():
             logger.info("Training new model from scratch")
             model = TFAutoModelForMaskedLM.from_config(config)
 
-        model.resize_token_embeddings(len(fast_tokenizer))
+        model.resize_token_embeddings(len(tokenizer))
         # endregion
 
         # region TF Dataset preparation
         num_replicas = training_args.strategy.num_replicas_in_sync
         data_collator = DataCollatorForLanguageModeling(
-            tokenizer=fast_tokenizer, mlm_probability=data_args.mlm_probability, return_tensors="tf"
+            tokenizer=tokenizer, mlm_probability=data_args.mlm_probability, return_tensors="tf"
         )
         options = tf.data.Options()
         options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.OFF
