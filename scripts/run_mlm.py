@@ -746,7 +746,8 @@ def main():
     if training_args.output_dir is not None and not training_args.push_to_hub:
         # If we're not pushing to hub, at least save a local copy when we're done
         model.save_pretrained(training_args.output_dir)
-
+        with open(os.path.join(training_args.output_dir, 'run_mlm.his'), 'wb') as file_pi:
+            pickle.dump(history.history, file_pi)
 
 if __name__ == "__main__":
     main()
