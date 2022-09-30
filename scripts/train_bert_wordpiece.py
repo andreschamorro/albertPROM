@@ -14,15 +14,6 @@ def get_training_corpus(trans_data, batch_size, k):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--files",
-        default=None,
-        metavar="path",
-        type=str,
-        required=True,
-        help="The files to use as training; accept '**/*.txt' type of patterns \
-                              if enclosed in quotes",
-    )
-    parser.add_argument(
         "--out",
         default="./",
         type=str,
@@ -61,8 +52,8 @@ def main():
 
     # And then train
     tokenizer.train_from_iterator(
-        get_training_corpus(trans_data, batch_size, args.k),
-        vocab_size=args.k,
+        get_training_corpus(trans_data, args.batch_size, args.k),
+        vocab_size=args.vocab_size,
         min_frequency=2,
         show_progress=True,
         special_tokens=["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"],
