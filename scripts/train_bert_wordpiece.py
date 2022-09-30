@@ -2,6 +2,7 @@ import argparse
 import glob
 from typing import List
 
+import datasets
 from tokenizers import BertWordPieceTokenizer
 
 def _kmer_split(k: int, sequence: str) -> List[str]:
