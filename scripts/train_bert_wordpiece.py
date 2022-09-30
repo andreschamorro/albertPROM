@@ -33,12 +33,6 @@ def main():
     )
     args = parser.parse_args()
     
-    files = glob.glob(args.files)
-    if not files:
-        print(f"File does not exist: {args.files}")
-        exit(1)
-    
-    
     # Initialize an empty tokenizer
     tokenizer = BertWordPieceTokenizer(
         clean_text=True,
