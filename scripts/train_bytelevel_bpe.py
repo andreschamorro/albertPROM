@@ -60,7 +60,7 @@ def main():
         vocab_size=args.vocab_size,
         min_frequency=2,
         show_progress=True,
-        special_tokens=["<s>", "<pad>", "</s>"],
+        special_tokens=["<s>", "<pad>", "</s>", "<unk>", "<mask>",],
     )
     
     # Save the files
