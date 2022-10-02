@@ -24,6 +24,7 @@ https://huggingface.co/models?filter=fill-mask
 import logging
 import math
 import os
+import random
 import sys
 from dataclasses import dataclass, field
 from itertools import chain
