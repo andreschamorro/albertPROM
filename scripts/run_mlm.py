@@ -407,7 +407,10 @@ def main():
         column_names = raw_datasets["train"].column_names
     else:
         column_names = raw_datasets["validation"].column_names
-    text_column_name = "text" if "text" in column_names else column_names[0]
+    if data_args.dataset_name == "ngs":
+        features_names = [col for col in column_names if col.startswith('read')]
+    else:
+        features_names = ["sequence"] if "sequence" in column_names else [column_names[0]]
 
     if data_args.max_seq_length is None:
         max_seq_length = tokenizer.model_max_length
