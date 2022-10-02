@@ -28,7 +28,7 @@ import random
 import sys
 from dataclasses import dataclass, field
 from itertools import chain
-from typing import Optional
+from typing import Optional, List
 
 import datasets
 from datasets import load_dataset
@@ -52,8 +52,8 @@ from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import check_min_version, send_example_telemetry
 from transformers.utils.versions import require_version
 
-from typing import List
-
+# Will error if the minimal version of Transformers is not installed. Remove at your own risks.
+check_min_version("4.23.0.dev0")
 require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/language-modeling/requirements.txt")
 
 logger = logging.getLogger(__name__)
@@ -473,10 +473,6 @@ def main():
             desc="Running tokenizer on every pairs in dataset",
         )
 
-        # Log a few random samples from the training set:
-        for index in random.sample(range(len(tokenized_datasets)), min(3, len(tokenized_datasets))):
-            logger.info(f"Sample {index} of the training set: {raw_datasets['train'][index]['sequence']}.")
-            logger.info(f"Sample {index} of the training set: {tokenized_datasets['train'][index]}.")
         # Main data processing function that will concatenate all texts from our dataset and generate chunks of
         # max_seq_length.
         def group_texts(examples):
