@@ -60,7 +60,7 @@ def main():
         vocab_size=args.vocab_size,
         min_frequency=2,
         show_progress=True,
-        special_tokens=["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"],
+        special_tokens=["<s>", "<pad>", "</s>"],
     )
     
     # Save the files
