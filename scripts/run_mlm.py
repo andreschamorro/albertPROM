@@ -324,7 +324,7 @@ def main():
             cache_dir=model_args.cache_dir,
             use_auth_token=True if model_args.use_auth_token else None,
             **dataset_script_config,
-        )
+        ).shuffle()
         if "validation" not in raw_datasets.keys():
             raw_datasets["validation"] = load_dataset(
                 DATASET_TYPES[data_args.dataset_name],
@@ -334,7 +334,7 @@ def main():
                 cache_dir=model_args.cache_dir,
                 use_auth_token=True if model_args.use_auth_token else None,
                 **dataset_script_config,
-            )
+            ).shuffle()
             raw_datasets["train"] = load_dataset(
                 DATASET_TYPES[data_args.dataset_name],
                 data_args.dataset_config_name,
@@ -343,7 +343,7 @@ def main():
                 cache_dir=model_args.cache_dir,
                 use_auth_token=True if model_args.use_auth_token else None,
                 **dataset_script_config,
-            )
+            ).shuffle()
     else:
         raise NotImplementedError
     # See more about loading any type of standard or custom dataset (from files, python dict, pandas DataFrame, etc) at
