@@ -4,7 +4,7 @@ import os
 from typing import List
 
 import datasets
-from tokenizers import ByteLevelBPETokenizer 
+from tokenizers import pre_tokenizers, SentencePieceUnigramTokenizer 
 from transformers import PreTrainedTokenizerFast
 
 DATASET_TYPES = {"ngs": "loaders/ngs_script.py", "wtr": "loaders/trns_script.py"}
@@ -25,7 +25,7 @@ def main():
         help="Path to the output directory, where the files will be saved",
     )
     parser.add_argument(
-        "--name", default="bert-wordpiece", type=str, help="The name of the output vocab files"
+        "--name", default="sequencepiece_unigram", type=str, help="The name of the output vocab files"
     )
     parser.add_argument(
         "--dataset", default="wtr", type=str, help="The name of the input dataset"
@@ -48,11 +48,15 @@ def main():
     parser.add_argument('--fast', action='store_true')
     args = parser.parse_args()
     
+    trans_data = datasets.load_dataset(DATASET_TYPES[args.dataset], args.dataset_config_name, data_dir=args.dataset_dir)
+    trans_data = trans_data.shuffle(seed=42)
+
     # Initialize an empty tokenizer
-    tokenizer = ByteLevelBPETokenizer(
-            add_prefix_space=True,
-            lowercase=True,
-    )
+    tokenizer = SentencePieceUnigramTokenizer()
+    
+    tokenizer.pre_tokenizer = pre_tokenizers.Sequence([
+        pre_tokenizers.Whitespace(),
+        tokenizer.pre_tokenizer,])
 
     tokenizer.post_processor = TemplateProcessing(
             single="[CLS] $A [SEP]",
@@ -61,9 +65,6 @@ def main():
                 ("[CLS]", tokenizer.token_to_id("[CLS]")),
                 ("[SEP]", tokenizer.token_to_id("[SEP]")),
             )
-    
-    trans_data = datasets.load_dataset(DATASET_TYPES[args.dataset], args.dataset_config_name, data_dir=args.dataset_dir)
-    trans_data = trans_data.shuffle(seed=42)
 
     # And then train
     tokenizer.train_from_iterator(
