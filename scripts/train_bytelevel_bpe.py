@@ -1,9 +1,11 @@
 import argparse
 import glob
+import os
 from typing import List
 
 import datasets
 from tokenizers import ByteLevelBPETokenizer 
+from transformers import PreTrainedTokenizerFast
 
 DATASET_TYPES = {"ngs": "loaders/ngs_script.py", "wtr": "loaders/trns_script.py"}
 
@@ -43,6 +45,7 @@ def main():
     parser.add_argument(
         "--k", default=17, type=int
     )
+    parser.add_argument('--fast', action='store_true')
     args = parser.parse_args()
     
     # Initialize an empty tokenizer
@@ -60,11 +63,19 @@ def main():
         vocab_size=args.vocab_size,
         min_frequency=2,
         show_progress=True,
-        special_tokens=["<s>", "<pad>", "</s>", "<unk>", "<mask>",],
+        special_tokens=["[CLS]", "<pad>", "[SEP]", "<unk>", "[MASK]",],
     )
-    
+    if args.fast:
+        fast_tokenizer =  PreTrainedTokenizerFast(
+                tokenizer_object=tokenizer,
+                bos_token='[CLS]', eos_token='[SEP]', 
+                unk_token='<unk>', sep_token='[SEP]', 
+                cls_token='[CLS]', pad_token='<pad>', mask_token='[MASK]',
+                truncation_side='right')
+        fast_tokenizer.save_pretrained(os.path.join(args.output, args.name))
     # Save the files
-    tokenizer.save_model(args.out, args.name)
+    else:
+        tokenizer.save_model(args.out, args.name)
 
 if __name__ == "__main__":
     main()
