@@ -4,7 +4,7 @@ import os
 from typing import List
 
 import datasets
-from tokenizers import pre_tokenizers, SentencePieceUnigramTokenizer 
+from tokenizers import pre_tokenizers, processors, SentencePieceUnigramTokenizer 
 from transformers import PreTrainedTokenizerFast
 
 DATASET_TYPES = {"ngs": "loaders/ngs_script.py", "wtr": "loaders/trns_script.py"}
@@ -58,7 +58,7 @@ def main():
         pre_tokenizers.Whitespace(),
         tokenizer.pre_tokenizer,])
 
-    tokenizer.post_processor = TemplateProcessing(
+    tokenizer.post_processor = processors.TemplateProcessing(
             single="[CLS] $A [SEP]",
             pair="[CLS] $A [SEP] $B:1 [SEP]:1",
             special_tokens=[

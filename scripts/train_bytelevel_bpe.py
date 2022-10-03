@@ -4,7 +4,7 @@ import os
 from typing import List
 
 import datasets
-from tokenizers import ByteLevelBPETokenizer 
+from tokenizers import processors, ByteLevelBPETokenizer 
 from transformers import PreTrainedTokenizerFast
 
 DATASET_TYPES = {"ngs": "loaders/ngs_script.py", "wtr": "loaders/trns_script.py"}
@@ -54,7 +54,7 @@ def main():
             lowercase=True,
     )
 
-    tokenizer.post_processor = TemplateProcessing(
+    tokenizer.post_processor = processors.TemplateProcessing(
             single="[CLS] $A [SEP]",
             pair="[CLS] $A [SEP] $B:1 [SEP]:1",
             special_tokens=[
