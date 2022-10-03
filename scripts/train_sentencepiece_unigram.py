@@ -82,7 +82,7 @@ def main():
                 unk_token='<unk>', sep_token='[SEP]', 
                 cls_token='[CLS]', pad_token='<pad>', mask_token='[MASK]',
                 truncation_side='right')
-        fast_tokenizer.save_pretrained(os.path.join(args.output, args.name))
+        fast_tokenizer.save_pretrained(os.path.join(args.out, args.name))
     # Save the files
     else:
         tokenizer.save_model(args.out, args.name)
