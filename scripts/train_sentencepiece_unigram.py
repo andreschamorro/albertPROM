@@ -62,9 +62,9 @@ def main():
     tokenizer.train_from_iterator(
         get_training_corpus(trans_data, args.batch_size, args.k),
         vocab_size=args.vocab_size,
-        min_frequency=2,
         show_progress=True,
         special_tokens=["[CLS]", "<pad>", "[SEP]", "<unk>", "[MASK]",],
+        unk_token="<unk>",
     )
 
     tokenizer.post_processor = processors.TemplateProcessing(
