@@ -64,6 +64,7 @@ def main():
             special_tokens=[
                 ("[CLS]", tokenizer.token_to_id("[CLS]")),
                 ("[SEP]", tokenizer.token_to_id("[SEP]")),
+                ]
             )
 
     # And then train

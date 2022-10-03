@@ -60,6 +60,7 @@ def main():
             special_tokens=[
                 ("[CLS]", tokenizer.token_to_id("[CLS]")),
                 ("[SEP]", tokenizer.token_to_id("[SEP]")),
+                ]
             )
     
     trans_data = datasets.load_dataset(DATASET_TYPES[args.dataset], args.dataset_config_name, data_dir=args.dataset_dir)
