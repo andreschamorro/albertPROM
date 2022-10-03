@@ -54,15 +54,6 @@ def main():
             lowercase=True,
     )
 
-    tokenizer.post_processor = processors.TemplateProcessing(
-            single="[CLS] $A [SEP]",
-            pair="[CLS] $A [SEP] $B:1 [SEP]:1",
-            special_tokens=[
-                ("[CLS]", tokenizer.token_to_id("[CLS]")),
-                ("[SEP]", tokenizer.token_to_id("[SEP]")),
-                ]
-            )
-    
     trans_data = datasets.load_dataset(DATASET_TYPES[args.dataset], args.dataset_config_name, data_dir=args.dataset_dir)
     trans_data = trans_data.shuffle(seed=42)
 
@@ -74,6 +65,15 @@ def main():
         show_progress=True,
         special_tokens=["[CLS]", "<pad>", "[SEP]", "<unk>", "[MASK]",],
     )
+
+    tokenizer.post_processor = processors.TemplateProcessing(
+            single="[CLS] $A [SEP]",
+            pair="[CLS] $A [SEP] $B:1 [SEP]:1",
+            special_tokens=[
+                ("[CLS]", tokenizer.token_to_id("[CLS]")),
+                ("[SEP]", tokenizer.token_to_id("[SEP]")),
+                ]
+            )
     if args.fast:
         fast_tokenizer =  PreTrainedTokenizerFast(
                 tokenizer_object=tokenizer,

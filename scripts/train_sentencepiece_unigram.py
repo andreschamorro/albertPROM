@@ -58,15 +58,6 @@ def main():
         pre_tokenizers.Whitespace(),
         tokenizer.pre_tokenizer,])
 
-    tokenizer.post_processor = processors.TemplateProcessing(
-            single="[CLS] $A [SEP]",
-            pair="[CLS] $A [SEP] $B:1 [SEP]:1",
-            special_tokens=[
-                ("[CLS]", tokenizer.token_to_id("[CLS]")),
-                ("[SEP]", tokenizer.token_to_id("[SEP]")),
-                ]
-            )
-
     # And then train
     tokenizer.train_from_iterator(
         get_training_corpus(trans_data, args.batch_size, args.k),
@@ -75,6 +66,15 @@ def main():
         show_progress=True,
         special_tokens=["[CLS]", "<pad>", "[SEP]", "<unk>", "[MASK]",],
     )
+
+    tokenizer.post_processor = processors.TemplateProcessing(
+            single="[CLS] $A [SEP]",
+            pair="[CLS] $A [SEP] $B:1 [SEP]:1",
+            special_tokens=[
+                ("[CLS]", tokenizer.token_to_id("[CLS]")),
+                ("[SEP]", tokenizer.token_to_id("[SEP]")),
+                ]
+            )
     if args.fast:
         fast_tokenizer =  PreTrainedTokenizerFast(
                 tokenizer_object=tokenizer,
