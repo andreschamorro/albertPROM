@@ -4,7 +4,7 @@ import os
 from typing import List
 
 import datasets
-from tokenizers import normalizers, pre_tokenizers, processors, SentencePieceUnigramTokenizer 
+from tokenizers import normalizers, pre_tokenizers, processors, SentencePieceUnigramTokenizer, Regex 
 from transformers import PreTrainedTokenizerFast
 
 DATASET_TYPES = {"ngs": "loaders/ngs_script.py", "wtr": "loaders/trns_script.py"}
