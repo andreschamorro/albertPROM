@@ -4,7 +4,7 @@ import os
 from typing import List
 
 import datasets
-from tokenizers import pre_tokenizers, processors, SentencePieceUnigramTokenizer 
+from tokenizers import normalizers, pre_tokenizers, processors, SentencePieceUnigramTokenizer 
 from transformers import PreTrainedTokenizerFast
 
 DATASET_TYPES = {"ngs": "loaders/ngs_script.py", "wtr": "loaders/trns_script.py"}
@@ -53,6 +53,10 @@ def main():
 
     # Initialize an empty tokenizer
     tokenizer = SentencePieceUnigramTokenizer()
+
+    tokenizer.normalizer = normalizers.Sequence(
+            [normalizers.Nmt(), normalizers.Lowercase(), normalizers.Replace(Regex("[^actg\s]"), "")]
+            )
     
     tokenizer.pre_tokenizer = pre_tokenizers.Sequence([
         pre_tokenizers.Whitespace(),
