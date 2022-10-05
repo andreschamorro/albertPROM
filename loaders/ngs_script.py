@@ -24,6 +24,7 @@ import subprocess
 import shutil
 import six
 import ngsim
+from Bio import bgzf, SeqIO
 
 import datasets
 
@@ -54,6 +55,7 @@ _URLS = {
 
 _FILES = {
     "transcript": "gencode.v41.transcripts.fa.gz", 
+    "transcript_ext": ["transcript_R1.fq", "transcript_R2.fq"]
     "whole_genome": "hg38.fa.gz"
 }
 
@@ -144,11 +146,19 @@ class NGSDataset(datasets.GeneratorBasedBuilder):
         # By default the archives will be extracted and a path to a cached folder where they are extracted is returned instead of the archive
 
         data_dir = os.path.abspath(os.path.expanduser(dl_manager.manual_dir))
-        ref_file = os.path.join(data_dir, _FILES[self.config.name])
-        if not os.path.exists(ref_file):
-            raise FileNotFoundError(
-                "{ref_files} does not exist. Make sure you insert a manual dir that includes the file name {f}. Manual download instructions: {self.manual_download_instructions})"
-            )
+        if self.config.name.endswith('_ext'):
+            ref_file = [os.path.join(data_dir, file) for file in _FILES[self.config.name]]
+            for file in ref_file:
+                if not os.path.exists(file):
+                    raise FileNotFoundError(
+                        f"{file} does not exist. Make sure you insert a manual dir that includes the file name {f}. Manual download instructions: {self.manual_download_instructions})"
+                    )
+        else:
+            ref_file = os.path.join(data_dir, _FILES[self.config.name])
+            if not os.path.exists(ref_file):
+                raise FileNotFoundError(
+                    "{ref_files} does not exist. Make sure you insert a manual dir that includes the file name {f}. Manual download instructions: {self.manual_download_instructions})"
+                )
 
         return ref_file
 
@@ -205,10 +215,18 @@ class NGSDataset(datasets.GeneratorBasedBuilder):
     def _generate_examples(self, reference, split):
         # TODO: This method handles input defined in _split_generators to yield (key, example) tuples from the dataset.
         # The `key` is for legacy reasons (tfds) and is not important in itself, but must be unique for each example.
-        for i, (sid, r1, r2) in enumerate(ngsim.readgen(reference, size=self.config.num_read, 
-                                            x_fold=self.config.x_fold, len_l=self.config.len_l, len_r=self.config.len_r,
-                                            std_dev=self.config.std_dev, dist=self.config.dist, is_hap=self.config.is_hap)):
-            if self.config.name == "transcript":
+        if self.config.name.endswith('_ext'):
+            with open(reference[0], 'r') as r1_file, open(reference[1], 'r') as r2_file:
+                for i, (r1, r2) in enumerate(zip(SeqIO.parse(r1_file, 'fastq'), SeqIO.parse(r2_file, 'fastq'))):
+                    yield i, {
+                            "read_1": r1.seq,
+                            "read_2": r2.seq,
+                            "transcript_src": r1.id.split(',')[0], # ART style read sep
+                            }
+        if self.config.name == "transcript":
+            for i, (sid, r1, r2) in enumerate(ngsim.readgen(reference, size=self.config.num_read, 
+                                                x_fold=self.config.x_fold, len_l=self.config.len_l, len_r=self.config.len_r,
+                                                std_dev=self.config.std_dev, dist=self.config.dist, is_hap=self.config.is_hap)):
                 yield i, {
                         "read_1": r1,
                         "read_2": r2,

@@ -32,6 +32,14 @@ from typing import Optional, List
 
 import datasets
 from datasets import load_dataset
+import ray
+from ray import tune
+from ray.tune import CLIReporter
+from ray.tune.examples.pbt_transformers.utils import (
+    download_data,
+    build_compute_metrics_fn,
+)
+from ray.tune.schedulers import PopulationBasedTraining
 
 import evaluate
 import transformers
@@ -386,21 +394,10 @@ def main():
             "You are instantiating a new tokenizer from scratch. This is not supported by this script."
             "You can do it from another script, save it, and load it from here, using --tokenizer_name."
         )
-
-    if model_args.model_name_or_path:
-        model = AutoModelForMaskedLM.from_pretrained(
-            model_args.model_name_or_path,
-            from_tf=bool(".ckpt" in model_args.model_name_or_path),
-            config=config,
-            cache_dir=model_args.cache_dir,
-            revision=model_args.model_revision,
-            use_auth_token=True if model_args.use_auth_token else None,
-        )
-    else:
-        logger.info("Training new model from scratch")
+    def get_model():
         model = AutoModelForMaskedLM.from_config(config)
-
-    model.resize_token_embeddings(len(tokenizer))
+        model.resize_token_embeddings(len(tokenizer))
+        return model
 
     # Preprocessing the datasets.
     # First we tokenize all the texts.
@@ -428,13 +425,14 @@ def main():
                 f"model ({tokenizer.model_max_length}). Using max_seq_length={tokenizer.model_max_length}."
             )
         max_seq_length = min(data_args.max_seq_length, tokenizer.model_max_length)
+
     if data_args.dataset_name == "ngs":
         # TODO group for reads > max_length
         padding = "max_length" if data_args.pad_to_max_length else False
         if data_args.read_by_read:
 
             def tokenize_function(examples):
-                kmer_example = [list(map(lambda r:" ".join(_kmer_split(k, r)), z)) for z in zip(*[examples[fn] for fn in features_names])]
+                kmer_example = [list(map(lambda r:" ".join(_kmer_split(model_args.model_ksize, r)), z)) for z in zip(*[examples[fn] for fn in features_names])]
                 return tokenizer(
                     kmer_example,
                     padding=padding,
@@ -459,7 +457,7 @@ def main():
             # We use `return_special_tokens_mask=True` because DataCollatorForLanguageModeling (see below) is more
             # efficient when it receives the `special_tokens_mask`.
             def tokenize_function(examples):
-                kmer_example = [f" {tokenizer.sep_token} ".join([" ".join(kr) for kr in map(lambda r: _kmer_split(k, r), z)]) for z in zip(*[examples[fn] for fn in features_names])]
+                kmer_example = [f" {tokenizer.sep_token} ".join([" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), z)]) for z in zip(*[examples[fn] for fn in features_names])]
                 return tokenizer(
                     kmer_example,
                     padding=padding,
@@ -484,7 +482,7 @@ def main():
         # We use `return_special_tokens_mask=True` because DataCollatorForLanguageModeling (see below) is more
         # efficient when it receives the `special_tokens_mask`.
         def tokenize_function(examples):
-            kmer_example = [f" {tokenizer.sep_token} ".join([" ".join(kr) for kr in map(lambda r: _kmer_split(k, r), z)]) for z in zip(*[examples[fn] for fn in features_names])]
+            kmer_example = [f" {tokenizer.sep_token} ".join([" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), z)]) for z in zip(*[examples[fn] for fn in features_names])]
             return tokenizer(kmer_example, return_special_tokens_mask=True)
         with training_args.main_process_first(desc="dataset map tokenization"):
             tokenized_datasets = raw_datasets.map(
@@ -535,7 +533,7 @@ def main():
         train_dataset = tokenized_datasets["train"]
         if data_args.max_train_samples is not None:
             max_train_samples = min(len(train_dataset), data_args.max_train_samples)
-            train_dataset = train_dataset.select(range(max_train_samples))
+            train_dataset = train_dataset.select(random.sample(range(len(train_dataset)), k=max_train_samples))
 
     if training_args.do_eval:
         if "validation" not in tokenized_datasets:
@@ -576,7 +574,7 @@ def main():
 
     # Initialize our Trainer
     trainer = Trainer(
-        model=model,
+        model_init=get_model,
         args=training_args,
         train_dataset=train_dataset if training_args.do_train else None,
         eval_dataset=eval_dataset if training_args.do_eval else None,
@@ -588,42 +586,68 @@ def main():
         else None,
     )
 
-    # Training
-    if training_args.do_train:
-        checkpoint = None
-        if training_args.resume_from_checkpoint is not None:
-            checkpoint = training_args.resume_from_checkpoint
-        elif last_checkpoint is not None:
-            checkpoint = last_checkpoint
-        train_result = trainer.train(resume_from_checkpoint=checkpoint)
-        trainer.save_model()  # Saves the tokenizer too for easy upload
-        metrics = train_result.metrics
-
-        max_train_samples = (
-            data_args.max_train_samples if data_args.max_train_samples is not None else len(train_dataset)
-        )
-        metrics["train_samples"] = min(max_train_samples, len(train_dataset))
-
-        trainer.log_metrics("train", metrics)
-        trainer.save_metrics("train", metrics)
-        trainer.save_state()
-
     # Evaluation
     if training_args.do_eval:
         logger.info("*** Evaluate ***")
 
-        metrics = trainer.evaluate()
+        # metrics = trainer.evaluate()
 
-        max_eval_samples = data_args.max_eval_samples if data_args.max_eval_samples is not None else len(eval_dataset)
-        metrics["eval_samples"] = min(max_eval_samples, len(eval_dataset))
-        try:
-            perplexity = math.exp(metrics["eval_loss"])
-        except OverflowError:
-            perplexity = float("inf")
-        metrics["perplexity"] = perplexity
+        # max_eval_samples = data_args.max_eval_samples if data_args.max_eval_samples is not None else len(eval_dataset)
+        # metrics["eval_samples"] = min(max_eval_samples, len(eval_dataset))
+        # try:
+        #     perplexity = math.exp(metrics["eval_loss"])
+        # except OverflowError:
+        #     perplexity = float("inf")
+        # metrics["perplexity"] = perplexity
 
-        trainer.log_metrics("eval", metrics)
-        trainer.save_metrics("eval", metrics)
+        # trainer.log_metrics("eval", metrics)
+        # trainer.save_metrics("eval", metrics)
+    
+        tune_config = {
+                "per_device_train_batch_size": tune.choice([8, 16]),
+                "per_device_eval_batch_size": 16,
+                "num_train_epochs": tune.choice([2, 3]),
+                "max_steps": -1,  # Used for smoke test.
+        }
+
+        scheduler = PopulationBasedTraining(
+                time_attr="training_iteration",
+                metric="eval_acc",
+                mode="max",
+                perturbation_interval=1,
+                hyperparam_mutations={
+                    "hidden_size": tune.choice([512, 768, 1024]),
+                    "weight_decay": tune.uniform(0.0, 0.3),
+                    "learning_rate": tune.uniform(1e-5, 5e-4),
+                    },
+        )
+
+        reporter = CLIReporter(
+                parameter_columns={
+                    "weight_decay": "w_decay",
+                    "learning_rate": "lr",
+                    "hidden_size": "hs",
+                    "per_device_train_batch_size": "train_bs/cpu",
+                    "num_train_epochs": "num_epochs",
+                },
+                metric_columns=["eval_accuracy", "eval_loss", "epoch", "time_total_s", "training_iteration"],
+        )
+
+        best_run = trainer.hyperparameter_search(
+                hp_space=lambda _: tune_config,
+                backend="ray",
+                n_trials=64,
+                resources_per_trial={"cpu": 1, "gpu": 0},
+                scheduler=scheduler,
+                keep_checkpoints_num=1,
+                checkpoint_score_attr="training_iteration",
+                progress_reporter=reporter,
+                local_dir="~/ray_results/",
+                name="tune_transformer_mlm",
+                log_to_file=True,
+        )
+        print("Best trial hyperparameter: {}".format(best_run.hyperparameters))
+        print("Best objetive that was obtained for this run: {}".format(best_run.objective))
 
     kwargs = {"finetuned_from": model_args.model_name_or_path, "tasks": "fill-mask"}
     if data_args.dataset_name is not None:
@@ -646,4 +670,31 @@ def _mp_fn(index):
 
 
 if __name__ == "__main__":
+
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--ray-address",
+        type=str,
+        default=None,
+        help="Address to use for Ray. "
+             'Use "auto" for cluster. '
+             "Defaults to None for local.",
+    )
+    parser.add_argument(
+        "--server-address",
+        type=str,
+        default=None,
+        required=False,
+        help="The address of server to connect to if using " "Ray Client.",
+    )
+
+    args, _ = parser.parse_known_args()
+
+    if args.server_address:
+        ray.init(f"ray://{args.server_address}")
+    else:
+        ray.init(args.ray_address)
+
     main()
