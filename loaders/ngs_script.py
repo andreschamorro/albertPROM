@@ -82,10 +82,10 @@ class NGSConfig(datasets.BuilderConfig):
     def __init__(
         self,
         reads_names,
-        x_fold,
-        len_l, len_r,
-        std_dev, dist,
-        is_hap,
+        x_fold=None,
+        len_l=None, len_r=None,
+        std_dev=None, dist=None,
+        is_hap=False,
         num_read=None,
         **kwargs,
     ):
@@ -134,6 +134,11 @@ class NGSDataset(datasets.GeneratorBasedBuilder):
             std_dev=50,
             dist=500,
             is_hap=False,
+            num_read=None),
+        NGSConfig(name="transcript_ext", 
+            version=VERSION, 
+            description="External simulator for reads", 
+            reads_names=["read_1", "read_2"], 
             num_read=None),
     ]
 

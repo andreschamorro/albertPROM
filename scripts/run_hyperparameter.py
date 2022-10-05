@@ -612,7 +612,7 @@ def main():
 
         scheduler = PopulationBasedTraining(
                 time_attr="training_iteration",
-                metric="eval_acc",
+                metric="eval_accuracy",
                 mode="max",
                 perturbation_interval=1,
                 hyperparam_mutations={
