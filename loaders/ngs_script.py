@@ -55,7 +55,7 @@ _URLS = {
 
 _FILES = {
     "transcript": "gencode.v41.transcripts.fa.gz", 
-    "transcript_ext": ["transcripts_R1.fq", "transcripts_R2.fq"]
+    "transcript_ext": ["transcripts_R1.fq", "transcripts_R2.fq"],
     "whole_genome": "hg38.fa.gz"
 }
 
