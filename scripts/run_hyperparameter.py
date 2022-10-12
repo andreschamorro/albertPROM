@@ -607,7 +607,7 @@ def main():
                 "per_device_train_batch_size": tune.choice([8, 16]),
                 "per_device_eval_batch_size": 16,
                 "num_train_epochs": tune.choice([2, 3]),
-                "hidden_size": tune.choice([512, 768, 1024]),
+                "--config_overrides hidden_size": tune.choice([512, 768, 1024]),
                 "max_steps": -1,  # Used for smoke test.
         }
 

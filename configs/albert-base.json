@@ -11,7 +11,7 @@
   "gap_size": 0,
   "hidden_act": "gelu_new",
   "hidden_dropout_prob": 0,
-  "hidden_size": 512,
+  "hidden_size": 768,
   "initializer_range": 0.02,
   "inner_group_num": 1,
   "intermediate_size": 3072,
