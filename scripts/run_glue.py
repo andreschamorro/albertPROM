@@ -108,7 +108,7 @@ class DataTrainingArguments:
         },
     )
     validation_split_percentage: Optional[int] = field(
-        default=20,
+        default=10,
         metadata={
             "help": "The percentage of the train set used as validation set in case there's no validation split"
         },
