@@ -21,7 +21,7 @@ import os
 import random
 import sys
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import Optional, List, Union
 
 import datasets
 import numpy as np
@@ -46,6 +46,7 @@ from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import check_min_version, send_example_telemetry
 from transformers.utils.versions import require_version
 
+sys.path.extend(['.'])
 from model.model import AlbertForWeightedSequenceClassification
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
@@ -66,6 +67,7 @@ task_to_keys = {
 }
 
 logger = logging.getLogger(__name__)
+DATASET_TYPES = {"rds": "loaders/reads_script.py", "ngs": "loaders/ngs_script.py", "wtr": "loaders/trns_script.py"}
 
 def _kmer_split(k: int, sequence: str) -> List[str]:
     return " ".join([sequence[j: j + k] for j in range(len(sequence) - k + 1)])
@@ -93,6 +95,9 @@ class DataTrainingArguments:
     dataset_config_name: Optional[str] = field(
         default=None, metadata={"help": "The configuration name of the dataset to use (via the datasets library)."}
     )
+    dataset_dir: Optional[str] = field(
+        default=None, metadata={"help": "The data dir of the dataset configuration."}
+    )
     max_seq_length: int = field(
         default=128,
         metadata={
@@ -100,6 +105,12 @@ class DataTrainingArguments:
                 "The maximum total input sequence length after tokenization. Sequences longer "
                 "than this will be truncated, sequences shorter will be padded."
             )
+        },
+    )
+    validation_split_percentage: Optional[int] = field(
+        default=20,
+        metadata={
+            "help": "The percentage of the train set used as validation set in case there's no validation split"
         },
     )
     overwrite_cache: bool = field(
@@ -180,8 +191,8 @@ class ModelArguments:
         default=8,
         metadata={"help": "K size"},
     )
-    mode_loss_weight: Optional[List[Union[int, float]]] = field(
-        default=[1.0, 1.0],
+    model_loss_weight: Optional[List[Union[int, float]]] = field(
+        default_factory = lambda: [4.0, 1.0],
         metadata={"help": "A manual rescaling weight given to the loss of each batch element"})
     config_name: Optional[str] = field(
         default=None, metadata={"help": "Pretrained config name or path if not the same as model_name"}
@@ -231,7 +242,7 @@ def main():
 
     # Sending telemetry. Tracking the example usage helps us better allocate resources to maintain them. The
     # information sent is the one passed as arguments along with your Python/PyTorch versions.
-    send_example_telemetry("run_glue", model_args, data_args)
+    # send_example_telemetry("run_glue", model_args, data_args)
 
     # Setup logging
     logging.basicConfig(
@@ -302,10 +313,18 @@ def main():
                 cache_dir=model_args.cache_dir,
                 use_auth_token=True if model_args.use_auth_token else None,
             ).shuffle()
+            raw_datasets["test"] = load_dataset(
+                DATASET_TYPES[data_args.dataset_name],
+                data_args.dataset_config_name,
+                split=f"train[{data_args.validation_split_percentage}%:{2*data_args.validation_split_percentage}%]",
+                data_dir=data_args.dataset_dir,
+                cache_dir=model_args.cache_dir,
+                use_auth_token=True if model_args.use_auth_token else None,
+            ).shuffle()
             raw_datasets["train"] = load_dataset(
                 DATASET_TYPES[data_args.dataset_name],
                 data_args.dataset_config_name,
-                split=f"train[{data_args.validation_split_percentage}%:]",
+                split=f"train[{2*data_args.validation_split_percentage}%:]",
                 data_dir=data_args.dataset_dir,
                 cache_dir=model_args.cache_dir,
                 use_auth_token=True if model_args.use_auth_token else None,
@@ -397,7 +416,7 @@ def main():
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
         ignore_mismatched_sizes=model_args.ignore_mismatched_sizes,
-        loss_weight=model_args.loss_weight,
+        loss_weight=model_args.model_loss_weight,
     )
 
     # Preprocessing the raw_datasets
@@ -458,7 +477,7 @@ def main():
     def preprocess_function(examples):
         # Tokenize the texts
         args = (
-                (batch_split(k, examples[read_1_key]),) if read_2_key is None else (batch_split(k, examples[read_1_key]), batch_split(k, examples[read_2_key]))
+                (batch_split(model_args.model_ksize, examples[read_1_key]),) if read_2_key is None else (batch_split(model_args.model_ksize, examples[read_1_key]), batch_split(model_args.model_ksize, examples[read_2_key]))
         )
         result = tokenizer(*args, padding=padding, max_length=max_seq_length, truncation=True)
 
@@ -546,6 +565,7 @@ def main():
 
     # Training
     if training_args.do_train:
+        logger.info("*** Training ***")
         checkpoint = None
         if training_args.resume_from_checkpoint is not None:
             checkpoint = training_args.resume_from_checkpoint
