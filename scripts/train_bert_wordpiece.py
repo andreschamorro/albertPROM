@@ -43,6 +43,7 @@ def main():
     parser.add_argument(
         "--k", default=17, type=int
     )
+    parser.add_argument('--fast', action='store_true')
     args = parser.parse_args()
     
     # Initialize an empty tokenizer
@@ -53,6 +54,12 @@ def main():
         lowercase=True,
     )
     
+    tokenizer.normalizer = normalizers.Sequence(
+            [normalizers.Nmt(), normalizers.Lowercase(), normalizers.Replace(Regex("[^actg\s]"), "")]
+            )
+
+    tokenizer.pre_tokenizer = pre_tokenizers.Whitespace()
+
     trans_data = datasets.load_dataset(DATASET_TYPES[args.dataset], args.dataset_config_name, data_dir=args.dataset_dir)
     trans_data = trans_data.shuffle(seed=42)
 
@@ -68,7 +75,16 @@ def main():
     )
     
     # Save the files
-    tokenizer.save_model(args.out, args.name)
+    if args.fast:
+        fast_tokenizer =  PreTrainedTokenizerFast(
+                tokenizer_object=tokenizer,
+                bos_token='[CLS]', eos_token='[SEP]', 
+                unk_token='[UNK]', sep_token='[SEP]', 
+                cls_token='[CLS]', pad_token='[PAD]', mask_token='[MASK]',
+                truncation_side='right')
+        fast_tokenizer.save_pretrained(os.path.join(args.out, args.name))
+    else:
+        tokenizer.save_model(args.out, args.name)
 
 if __name__ == "__main__":
     main()

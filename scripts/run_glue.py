@@ -61,7 +61,8 @@ task_to_keys = {
     "qnli": ("query_1", "read_1"),
     "qqp": ("query_1", "query_2"),
     "rte": ("read_1", "read_2"),
-    "sst2": ("read_1", None),
+    "trc1": ("read_1", None),
+    "trc2": ("read_1", "read_2"),
     "stsb": ("read_1", "read_2"),
     "wnli": ("read_1", "read_2"),
 }
@@ -97,6 +98,10 @@ class DataTrainingArguments:
     )
     dataset_dir: Optional[str] = field(
         default=None, metadata={"help": "The data dir of the dataset configuration."}
+    )
+    preprocessing_num_workers: Optional[int] = field(
+        default=None,
+        metadata={"help": "The number of processes to use for the preprocessing."},
     )
     max_seq_length: int = field(
         default=128,
@@ -490,6 +495,7 @@ def main():
         raw_datasets = raw_datasets.map(
             preprocess_function,
             batched=True,
+            num_proc=data_args.preprocessing_num_workers,
             load_from_cache_file=not data_args.overwrite_cache,
             desc="Running tokenizer on dataset",
         )
