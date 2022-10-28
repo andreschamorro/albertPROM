@@ -64,7 +64,7 @@ class AlbertForWeightedSequenceClassification(AlbertPreTrainedModel):
         super().__init__(config)
         self.num_labels = config.num_labels
         self.config = config
-        self.loss_weight = torch.FloatTensor(loss_weight)
+        self.loss_weight = torch.FloatTensor(loss_weight) if loss_weight else None
 
         self.albert = AlbertModel(config)
         self.dropout = nn.Dropout(config.classifier_dropout_prob)

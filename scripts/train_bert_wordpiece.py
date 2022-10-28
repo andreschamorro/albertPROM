@@ -3,7 +3,8 @@ import glob
 from typing import List
 
 import datasets
-from tokenizers import BertWordPieceTokenizer
+from tokenizers import normalizers, pre_tokenizers, BertWordPieceTokenizer, Regex
+from transformers import PreTrainedTokenizerFast
 
 DATASET_TYPES = {"ngs": "loaders/ngs_script.py", "wtr": "loaders/trns_script.py"}
 
