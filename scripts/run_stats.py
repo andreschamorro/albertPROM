@@ -24,12 +24,14 @@ https://huggingface.co/models?filter=fill-mask
 import logging
 import math
 import os
+import re
 import random
 import sys
 from dataclasses import dataclass, field
 from itertools import chain
 from typing import Optional, List
 from functools import reduce
+from collections import Counter
 
 import datasets
 from datasets import load_dataset
@@ -329,26 +331,7 @@ def main():
             cache_dir=model_args.cache_dir,
             use_auth_token=True if model_args.use_auth_token else None,
             **dataset_script_config,
-        ).shuffle()
-        if "validation" not in raw_datasets.keys():
-            raw_datasets["validation"] = load_dataset(
-                DATASET_TYPES[data_args.dataset_name],
-                data_args.dataset_config_name,
-                split=f"train[:{data_args.validation_split_percentage}%]",
-                data_dir=data_args.dataset_dir,
-                cache_dir=model_args.cache_dir,
-                use_auth_token=True if model_args.use_auth_token else None,
-                **dataset_script_config,
-            ).shuffle()
-            raw_datasets["train"] = load_dataset(
-                DATASET_TYPES[data_args.dataset_name],
-                data_args.dataset_config_name,
-                split=f"train[{data_args.validation_split_percentage}%:]",
-                data_dir=data_args.dataset_dir,
-                cache_dir=model_args.cache_dir,
-                use_auth_token=True if model_args.use_auth_token else None,
-                **dataset_script_config,
-            ).shuffle()
+        )
     else:
         raise NotImplementedError
     # See more about loading any type of standard or custom dataset (from files, python dict, pandas DataFrame, etc) at
@@ -364,17 +347,6 @@ def main():
         "revision": model_args.model_revision,
         "use_auth_token": True if model_args.use_auth_token else None,
     }
-    if model_args.config_name:
-        config = AutoConfig.from_pretrained(model_args.config_name, **config_kwargs)
-    elif model_args.model_name_or_path:
-        config = AutoConfig.from_pretrained(model_args.model_name_or_path, **config_kwargs)
-    else:
-        config = CONFIG_MAPPING[model_args.model_type]()
-        logger.warning("You are instantiating a new config instance from scratch.")
-        if model_args.config_overrides is not None:
-            logger.info(f"Overriding config: {model_args.config_overrides}")
-            config.update_from_string(model_args.config_overrides)
-            logger.info(f"New config: {config}")
 
     tokenizer_kwargs = {
         "cache_dir": model_args.cache_dir,
@@ -396,8 +368,6 @@ def main():
     # First we tokenize all the texts.
     if training_args.do_train:
         column_names = raw_datasets["train"].column_names
-    else:
-        column_names = raw_datasets["validation"].column_names
     if data_args.dataset_name == "ngs":
         features_names = [col for col in column_names if col.startswith('read')]
     else:
@@ -481,15 +451,15 @@ def main():
 
         with training_args.main_process_first(desc="dataset map tokenization"):
             stats_datasets = tokenized_datasets.map(
-                tokenize_function,
+                tokenize_stats,
                 batched=True,
                 num_proc=data_args.preprocessing_num_workers,
-                remove_columns=tokenized_datasets.column_names,
+                remove_columns=tokenized_datasets["train"].column_names,
                 load_from_cache_file=not data_args.overwrite_cache,
                 desc="Running tokenizer on every sequence in dataset",
             )
 
-        stats_datasets.to_pandas().to_csv(os.path.join(training_args.output_dir, "stats_cov.csv"))
+        stats_datasets["train"].to_pandas().to_csv(os.path.join(training_args.output_dir, "stats_cov.csv"))
 def _mp_fn(index):
     # For xla_spawn (TPUs)
     main()
