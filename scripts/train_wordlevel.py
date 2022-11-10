@@ -55,20 +55,13 @@ def main():
     args = parser.parse_args()
     
     # Initialize an empty tokenizer
-    tokenizer = BertWordPieceTokenizer(
-        clean_text=True,
-        handle_chinese_chars=False,
-        strip_accents=False,
-        lowercase=True,
-    )
-
     tokenizer = Tokenizer(WordLevel(unk_token="[UNK]"))
     
     tokenizer.normalizer = Sequence([Lowercase(), Replace(Regex("[^actg\s]"), "")])
 
     tokenizer.pre_tokenizer = Whitespace()
 
-    tokenizer.post_processor = processors.TemplateProcessing(
+    tokenizer.post_processor = TemplateProcessing(
             single="[CLS] $A [SEP]",
             pair="[CLS] $A [SEP] $B:1 [SEP]:1",
             special_tokens=[
@@ -90,7 +83,7 @@ def main():
     
     # Save the files
     if args.fast:
-        fast_tokenizer =  PreTrainedTokenizerFast(
+        fast_tokenizer = PreTrainedTokenizerFast(
                 tokenizer_object=tokenizer,
                 bos_token='[CLS]', eos_token='[SEP]', 
                 unk_token='[UNK]', sep_token='[SEP]', 
