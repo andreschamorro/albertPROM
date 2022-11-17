@@ -486,9 +486,10 @@ def main():
             for i in range(0, len(data["train"]), batch_size):
                 yield data["train"][i : i + batch_size]["input_ids"]
 
-        with Pool() as pool:
-            batch_size = len(tokenized_datasets["train"]) // data_args.preprocessing_num_workers
-            results = pool.map_async(count_ids, list(get_batch_corpus(tokenized_datasets, batch_size)))
+        result = map(count_ids, get_batch_corpus(tokenized_datasets, 1024*8))
+        #with Pool() as pool:
+        #    batch_size = len(tokenized_datasets["train"]) // data_args.preprocessing_num_workers
+        #    results = pool.map_async(count_ids, list(get_batch_corpus(tokenized_datasets, batch_size)))
 
         total_count = reduce(reduce_counts, results)
 
