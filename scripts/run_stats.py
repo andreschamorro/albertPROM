@@ -447,8 +447,8 @@ def main():
         def tokenize_stats(examples):
             stats = {}
             stats['len'] = list(map(lambda e: len(e), examples['input_ids']))
-            stats['countoken'] = list(map(lambda e: countoken(tokenizer.convert_ids_to_tokens(e, skip_special_tokens=True)),
-                                          examples['input_ids']))
+            # stats['countoken'] = list(map(lambda e: countoken(tokenizer.convert_ids_to_tokens(e, skip_special_tokens=True)),
+            #                               examples['input_ids']))
             stats['countunks'] = list(map(lambda e: e.count(tokenizer.unk_token_id), examples['input_ids']))
             return stats
 
@@ -465,7 +465,7 @@ def main():
         stats_datasets["train"].to_pandas().to_csv(os.path.join(training_args.output_dir, "stats_cov_{}.csv".format(model_args.model_ksize)))
     if data_args.task_name == "cou":
         def count_ids(examples):
-            return dict(Counter(examples))
+            return dict(Counter(chain.from_iterable(examples)))
         def reduce_counts(count1, count2):
             """
             Combine (reduce) the passed two dictionaries to return
@@ -478,7 +478,7 @@ def main():
             for key in count1:
                 combined[key] = count1[key]
 
-            fot key in count2:
+            for key in count2:
                 combined[key] = count2[key]
             return dict(words)
 
@@ -488,7 +488,7 @@ def main():
 
         with Pool() as pool:
             batch_size = len(tokenized_datasets["train"]) // data_args.preprocessing_num_workers
-            results = pool.imap(count_words, list(get_batch_corpus(tokenized_datasets, batch_size)))
+            results = pool.map_async(count_ids, list(get_batch_corpus(tokenized_datasets, batch_size)))
 
         total_count = reduce(reduce_counts, results)
 
