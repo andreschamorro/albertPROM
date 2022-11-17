@@ -27,11 +27,14 @@ import os
 import re
 import random
 import sys
+import json
 from dataclasses import dataclass, field
 from itertools import chain
 from typing import Optional, List
 from functools import reduce
 from collections import Counter
+from functools import reduce
+from multiprocessing import Pool
 
 import datasets
 from datasets import load_dataset
@@ -459,7 +462,39 @@ def main():
                 desc="Running tokenizer on every sequence in dataset",
             )
 
-        stats_datasets["train"].to_pandas().to_csv(os.path.join(training_args.output_dir, "stats_cov.csv"))
+        stats_datasets["train"].to_pandas().to_csv(os.path.join(training_args.output_dir, "stats_cov_{}.csv".format(model_args.model_ksize)))
+    if data_args.task_name == "cou":
+        def count_ids(examples):
+            return dict(Counter(examples))
+        def reduce_counts(count1, count2):
+            """
+            Combine (reduce) the passed two dictionaries to return
+            a dictionary that contains the keys of both, where the
+            values are equal to the sum of values for each key
+            """
+            # explicitly copy the dictionary, as otherwise
+            # we risk modifying 'dict1'
+            combined = defaultdict(lambda: 0)
+            for key in count1:
+                combined[key] = count1[key]
+
+            fot key in count2:
+                combined[key] = count2[key]
+            return dict(words)
+
+        def get_batch_corpus(data, batch_size):
+            for i in range(0, len(data["train"]), batch_size):
+                yield data["train"][i : i + batch_size]["input_ids"]
+
+        with Pool() as pool:
+            batch_size = len(tokenized_datasets["train"]) // data_args.preprocessing_num_workers
+            results = pool.imap(count_words, list(get_batch_corpus(tokenized_datasets, batch_size)))
+
+        total_count = reduce(reduce_counts, results)
+
+        with open(os.path.join(training_args.output_dir, "stats_count_{}.json".format(model_args.model_ksize)), "w") as write_json:
+            json.dump(total_count, write_json, indent=4)
+
 def _mp_fn(index):
     # For xla_spawn (TPUs)
     main()
