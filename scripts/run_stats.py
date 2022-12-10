@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from itertools import chain
 from typing import Optional, List
 from functools import reduce
-from collections import Counter
+from collections import defaultdict, Counter
 from functools import reduce
 from multiprocessing import Pool
 
@@ -480,13 +480,13 @@ def main():
 
             for key in count2:
                 combined[key] = count2[key]
-            return dict(words)
+            return dict(combined)
 
         def get_batch_corpus(data, batch_size):
             for i in range(0, len(data["train"]), batch_size):
                 yield data["train"][i : i + batch_size]["input_ids"]
 
-        result = map(count_ids, get_batch_corpus(tokenized_datasets, 1024*8))
+        results = map(count_ids, get_batch_corpus(tokenized_datasets, 1024*8))
         #with Pool() as pool:
         #    batch_size = len(tokenized_datasets["train"]) // data_args.preprocessing_num_workers
         #    results = pool.map_async(count_ids, list(get_batch_corpus(tokenized_datasets, batch_size)))

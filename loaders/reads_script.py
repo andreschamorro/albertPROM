@@ -140,14 +140,14 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
             description="Paired-End Reads", 
             reads_names=["read_1", "read_2"], 
             label_classes=_LABELS["monoTE"],
-            label_column="label",
+            label_column=["label_1", "label_2"],
             num_read=None),
         ReadsConfig(name="paired_poly", 
             version=VERSION, 
             description="Paired-End Reads", 
             reads_names=["read_1", "read_2"], 
             label_classes=_LABELS["polyTE"],
-            label_column="label",
+            label_column=["label_1", "label_2"],
             num_read=None),
     ]
 
@@ -185,19 +185,26 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
                     # These are the features of your dataset like images, labels ...
                 }
             )
+            if self.config.label_classes:
+                features["label"] = datasets.features.ClassLabel(names=self.config.label_classes)
+            else:
+                features["label"] = datasets.Value("float32")
         else:  # This is an example to show how to have different features for "first_domain" and "second_domain"
             features = datasets.Features(
                 {
                     "read_1": datasets.Value("string"),
                     "read_2": datasets.Value("string"),
-                    "label": datasets.Value("string"),
+                    "label_1": datasets.Value("string"),
+                    "label_2": datasets.Value("string"),
                     # These are the features of your dataset like images, labels ...
                 }
             )
-        if self.config.label_classes:
-            features["label"] = datasets.features.ClassLabel(names=self.config.label_classes)
-        else:
-            features["label"] = datasets.Value("float32")
+            if self.config.label_classes:
+                features["label_1"] = datasets.features.ClassLabel(names=self.config.label_classes)
+                features["label_2"] = datasets.features.ClassLabel(names=self.config.label_classes)
+            else:
+                features["label_1"] = datasets.Value("float32")
+                features["label_2"] = datasets.Value("float32")
         return datasets.DatasetInfo(
             # This is the description that will appear on the datasets page.
             description=_READS_DESCRIPTION,
@@ -237,7 +244,7 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
                 for i, r1 in enumerate(SeqIO.parse(r1_file, 'fastq')):
                     yield i, {
                             "read_1": r1.seq,
-                            "label": r1.description.split()[-1], # ART style read sep
+                            "label": r1.description.split()[-1], # Read commentary 
                             }
         if self.config.name.startswith('paired'):
             with open(fastq[0], 'r') as r1_file, open(fastq[1], 'r') as r2_file:
@@ -245,5 +252,6 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
                     yield i, {
                             "read_1": r1.seq,
                             "read_2": r2.seq,
-                            "label": r1.description.split()[-1], # ART style read sep
+                            "label_1": r1.description.split()[-1], # Read commentary 
+                            "label_2": r2.description.split()[-1], # Read commentary 
                             }

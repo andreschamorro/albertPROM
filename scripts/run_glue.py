@@ -55,16 +55,13 @@ check_min_version("4.23.0.dev0")
 require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/text-classification/requirements.txt")
 
 task_to_keys = {
-    "cola": ("read_1", None),
-    "mnli": ("premise", "hypothesis"),
-    "mrpc": ("read_1", "read_2"),
-    "qnli": ("query_1", "read_1"),
-    "qqp": ("query_1", "query_2"),
-    "rte": ("read_1", "read_2"),
     "trc1": ("read_1", None),
     "trc2": ("read_1", "read_2"),
-    "stsb": ("read_1", "read_2"),
-    "wnli": ("read_1", "read_2"),
+}
+
+task_to_glue = {
+    "trc1": "sst2",
+    "trc2": "sst2",
 }
 
 logger = logging.getLogger(__name__)
@@ -376,12 +373,11 @@ def main():
 
     # Labels
     if data_args.task_name is not None:
-        is_regression = data_args.task_name == "stsb"
-        if not is_regression:
+        if data_args.task_name == "trc1":
             label_list = raw_datasets["train"].features["label"].names
-            num_labels = len(label_list)
         else:
-            num_labels = 1
+            label_list = raw_datasets["train"].features["label_1"].names
+        num_labels = len(label_list)
     else:
         # Trying to have good defaults here, don't hesitate to tweak to your needs.
         is_regression = raw_datasets["train"].features["label"].dtype in ["float32", "float64"]
@@ -429,7 +425,7 @@ def main():
         read_1_key, read_2_key = task_to_keys[data_args.task_name]
     else:
         # Again, we try to have some nice defaults but don't hesitate to tweak to your use case.
-        non_label_column_names = [name for name in raw_datasets["train"].column_names if name != "label"]
+        non_label_column_names = [name for name in raw_datasets["train"].column_names if "label" not in name]
         if "read_1" in non_label_column_names and "read_2" in non_label_column_names:
             read_1_key, read_2_key = "read_1", "read_2"
         else:
@@ -447,30 +443,10 @@ def main():
 
     # Some models have set the order of the labels to use, so let's make sure we do use it.
     label_to_id = None
-    if (
-        model.config.label2id != PretrainedConfig(num_labels=num_labels).label2id
-        and data_args.task_name is not None
-        and not is_regression
-    ):
-        # Some have all caps in their config, some don't.
-        label_name_to_id = {k.lower(): v for k, v in model.config.label2id.items()}
-        if list(sorted(label_name_to_id.keys())) == list(sorted(label_list)):
-            label_to_id = {i: int(label_name_to_id[label_list[i]]) for i in range(num_labels)}
-        else:
-            logger.warning(
-                "Your model seems to have been trained with labels, but they don't match the dataset: ",
-                f"model labels: {list(sorted(label_name_to_id.keys()))}, dataset labels: {list(sorted(label_list))}."
-                "\nIgnoring the model labels as a result.",
-            )
-    elif data_args.task_name is None and not is_regression:
-        label_to_id = {v: i for i, v in enumerate(label_list)}
-
-    if label_to_id is not None:
-        model.config.label2id = label_to_id
-        model.config.id2label = {id: label for label, id in config.label2id.items()}
-    elif data_args.task_name is not None and not is_regression:
+    if data_args.task_name is not None:
         model.config.label2id = {l: i for i, l in enumerate(label_list)}
         model.config.id2label = {id: label for label, id in config.label2id.items()}
+        label_to_id = {v: i for i, v in enumerate(label_list)}
 
     if data_args.max_seq_length > tokenizer.model_max_length:
         logger.warning(
@@ -480,15 +456,18 @@ def main():
     max_seq_length = min(data_args.max_seq_length, tokenizer.model_max_length)
 
     def preprocess_function(examples):
-        # Tokenize the texts
-        args = (
-                (batch_split(model_args.model_ksize, examples[read_1_key]),) if read_2_key is None else (batch_split(model_args.model_ksize, examples[read_1_key]), batch_split(model_args.model_ksize, examples[read_2_key]))
-        )
-        result = tokenizer(*args, padding=padding, max_length=max_seq_length, truncation=True)
+        # Tokenize the reads
+        kmer_example = [f" {tokenizer.sep_token} ".join(
+            [" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), z)]) 
+                        for z in zip(examples[read_1_key],  examples[read_2_key])]
+        #args = (
+        #        (batch_split(model_args.model_ksize, examples[read_1_key]),) if read_2_key is None else (batch_split(model_args.model_ksize, examples[read_1_key]), batch_split(model_args.model_ksize, examples[read_2_key]))
+        #)
+        result = tokenizer(kmer_example, padding=padding, max_length=max_seq_length, truncation=True)
 
         # Map labels to IDs (not necessary for GLUE tasks)
-        if label_to_id is not None and "label" in examples:
-            result["label"] = [(label_to_id[l] if l != -1 else -1) for l in examples["label"]]
+        if label_to_id is not None:
+            result["label"] = [(label_to_id["presence" if "presence" in l else "absence"] if l != -1 else -1) for l in zip(examples['label_1'],  examples['label_2'])]
         return result
 
     with training_args.main_process_first(desc="dataset map pre-processing"):
@@ -530,7 +509,7 @@ def main():
 
     # Get the metric function
     if data_args.task_name is not None:
-        metric = evaluate.load("glue", data_args.task_name)
+        metric = evaluate.load("glue", task_to_glue[data_args.task_name])
     else:
         metric = evaluate.load("accuracy")
 
