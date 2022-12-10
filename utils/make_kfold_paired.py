@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
 usage:
-    $  ./make_sample PRESENCE_PREFIX ABSENCE_PREFIX SAMPLE_DIR N_SPLITS
+    $  ./make_kfold_paired.py PRESENCE_PREFIX ABSENCE_PREFIX SAMPLE_DIR N_SPLITS
 """
 import sys, os, random
 from heapq import nlargest
@@ -38,6 +38,7 @@ with open(f"{p_prefix}1.fq", "r") as pr1_file, open(f"{p_prefix}1.fq", "r") as p
 print(f"presence count: {pr_count}")
 print("absence processing ...")
 
+ab_count = 0
 with open(f"{a_prefix}1.fq", "r") as ar1_file, open(f"{a_prefix}2.fq", "r") as ar2_file:
     for r1, r2 in zip(SeqIO.parse(ar1_file, "fastq"), SeqIO.parse(ar2_file, "fastq")):
         r1.id = abid_processing(r1.id)
