@@ -9,7 +9,6 @@ from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from sklearn.model_selection import StratifiedKFold
-import numpy as np
 
 # Get inputs
 p_prefix = sys.argv[1]
@@ -52,9 +51,6 @@ with open(f"{a_prefix}1.fq", "r") as ar1_file, open(f"{a_prefix}2.fq", "r") as a
 print(f"absence count: {ab_count}")
 # suffle data
 print("All sample processed")
-all_features = np.array(all_features)
-all_labels = np.array(all_labels)
-
 skf = StratifiedKFold(n_splits=n_splits, random_state=1, shuffle=True)
 print("Write sample ...")
 try:
@@ -64,7 +60,8 @@ except FileExistsError:
    pass
 
 for k, (train_index, test_index) in enumerate(skf.split(all_features, all_labels)):
-    train_fold, test_fold = all_features[train_index], all_features[test_index]
+    train_fold_1 = [all_features[i][0] for i in train_index]
+    train_fold_2 = [all_features[i][1] for i in train_index]
     # Train sample
     try:
        os.makedirs(os.path.join(d_prefix, "train"))
@@ -72,18 +69,20 @@ for k, (train_index, test_index) in enumerate(skf.split(all_features, all_labels
        # directory already exists
        pass
     with open(os.path.join(d_prefix, "train", f"{k}_R1.fq"), "w") as r1_file:
-        SeqIO.write(train_fold[:, 0], r1_file, "fastq")
+        SeqIO.write(train_fold_1, r1_file, "fastq")
     with open(os.path.join(d_prefix, "train", f"{k}_R2.fq"), "w") as r2_file:
-        SeqIO.write(train_fold[:, 1], r2_file, "fastq")
+        SeqIO.write(train_fold_2, r2_file, "fastq")
     # Test sample
+    test_fold_1 = [all_features[i][0] for i in test_index]
+    test_fold_2 = [all_features[i][1] for i in test_index]
     try:
        os.makedirs(os.path.join(d_prefix, "test"))
     except FileExistsError:
        # directory already exists
        pass
     with open(os.path.join(d_prefix, "test", f"{k}_R1.fq"), "w") as r1_file:
-        SeqIO.write(test_fold[:, 0], r1_file, "fastq")
+        SeqIO.write(test_fold_1, r1_file, "fastq")
     with open(os.path.join(d_prefix, "test", f"{k}_R2.fq"), "w") as r2_file:
-        SeqIO.write(test_fold[:, 1], r2_file, "fastq")
+        SeqIO.write(test_fold_2, r2_file, "fastq")
 
 print("Done")
