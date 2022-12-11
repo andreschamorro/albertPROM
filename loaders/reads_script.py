@@ -55,7 +55,8 @@ _URLS = {
 
 _FILES = {
     "single" : "single_R.fq",
-    "paired" : ["paired_R1.fq", "paired_R2.fq"],
+    "train_paired" : ["train_paired_R1.fq", "train_paired_R2.fq"],
+    "valid_paired" : ["valid_paired_R1.fq", "valid_paired_R2.fq"],
 }
 
 _LABELS = {
@@ -161,20 +162,27 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
 
         data_dir = os.path.abspath(os.path.expanduser(dl_manager.manual_dir))
         if self.config.name.startswith('paired'):
-            fastq_file = [os.path.join(data_dir, file) for file in _FILES['paired']]
-            for file in fastq_file:
+            fastq_train = [os.path.join(data_dir, file) for file in _FILES['train_paired']]
+            for file in fastq_train:
+                if not os.path.exists(file):
+                    raise FileNotFoundError(
+                        f"{file} does not exist. Make sure you insert a manual dir that includes the file name {f}. Manual download instructions: {self.manual_download_instructions})"
+                    )
+            fastq_valid = [os.path.join(data_dir, file) for file in _FILES['valid_paired']]
+            for file in fastq_valid:
                 if not os.path.exists(file):
                     raise FileNotFoundError(
                         f"{file} does not exist. Make sure you insert a manual dir that includes the file name {f}. Manual download instructions: {self.manual_download_instructions})"
                     )
         else:
-            fastq_file = os.path.join(data_dir, _FILES['single'])
+            fastq_train = os.path.join(data_dir, _FILES['single'])
             if not os.path.exists(fastq_file):
                 raise FileNotFoundError(
                     f"{fastq_file} does not exist. Make sure you insert a manual dir that includes the file name {f}. Manual download instructions: {self.manual_download_instructions})"
                 )
+            fastq_valid = None
 
-        return fastq_file
+        return fastq_train, fastq_valid
 
     def _info(self):
         if self.config.name.startswith("single"):  # This is the name of the configuration selected in BUILDER_CONFIGS above
@@ -222,15 +230,23 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
         )
 
     def _split_generators(self, dl_manager):
-        fastq_file = self._preprocessing(dl_manager)
+        fastq_train, fastq_valid = self._preprocessing(dl_manager)
 
         return [
             datasets.SplitGenerator(
                 name=datasets.Split.TRAIN,
                 # These kwargs will be passed to _generate_examples
                 gen_kwargs={
-                    "fastq": fastq_file,
+                    "fastq": fastq_train,
                     "split": "train"
+                },
+            ),
+            datasets.SplitGenerator(
+                name=datasets.Split.VALIDATION,
+                # These kwargs will be passed to _generate_examples
+                gen_kwargs={
+                    "fastq": fastq_valid,
+                    "split": "validation"
                 },
             ),
         ]
