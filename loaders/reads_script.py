@@ -166,13 +166,13 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
             for file in fastq_train:
                 if not os.path.exists(file):
                     raise FileNotFoundError(
-                        f"{file} does not exist. Make sure you insert a manual dir that includes the file name {f}. Manual download instructions: {self.manual_download_instructions})"
+                        f"{file} does not exist. Make sure you insert a manual dir that includes the file name {file}. Manual download instructions: {self.manual_download_instructions})"
                     )
             fastq_valid = [os.path.join(data_dir, file) for file in _FILES['valid_paired']]
             for file in fastq_valid:
                 if not os.path.exists(file):
                     raise FileNotFoundError(
-                        f"{file} does not exist. Make sure you insert a manual dir that includes the file name {f}. Manual download instructions: {self.manual_download_instructions})"
+                        f"{file} does not exist. Make sure you insert a manual dir that includes the file name {file}. Manual download instructions: {self.manual_download_instructions})"
                     )
         else:
             fastq_train = os.path.join(data_dir, _FILES['single'])

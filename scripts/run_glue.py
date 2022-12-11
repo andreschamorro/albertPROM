@@ -59,6 +59,11 @@ task_to_keys = {
     "trc2": ("read_1", "read_2"),
 }
 
+task_to_labelkeys = {
+    "trc1": ("label_1", None),
+    "trc2": ("label_1", "label_2"),
+}
+
 task_to_glue = {
     "trc1": "sst2",
     "trc2": "sst2",
@@ -387,6 +392,7 @@ def main():
     # https://huggingface.co/docs/datasets/loading_datasets.html.
 
     # Labels
+    is_regression = False
     if data_args.task_name is not None:
         if data_args.task_name == "trc1":
             label_list = raw_datasets["train"].features["label"].names
@@ -436,8 +442,13 @@ def main():
     )
 
     # Preprocessing the raw_datasets
+    if training_args.do_train:
+        column_names = raw_datasets["train"].column_names
+    else:
+        column_names = raw_datasets["validation"].column_names
     if data_args.task_name is not None:
         read_1_key, read_2_key = task_to_keys[data_args.task_name]
+        label_1_key, label_2_key = task_to_labelkeys[data_args.task_name]
     else:
         # Again, we try to have some nice defaults but don't hesitate to tweak to your use case.
         non_label_column_names = [name for name in raw_datasets["train"].column_names if "label" not in name]
@@ -479,10 +490,8 @@ def main():
         #        (batch_split(model_args.model_ksize, examples[read_1_key]),) if read_2_key is None else (batch_split(model_args.model_ksize, examples[read_1_key]), batch_split(model_args.model_ksize, examples[read_2_key]))
         #)
         result = tokenizer(kmer_example, padding=padding, max_length=max_seq_length, truncation=True)
-
-        # Map labels to IDs (not necessary for GLUE tasks)
-        if label_to_id is not None:
-            result["label"] = [(label_to_id["presence" if "presence" in l else "absence"] if l != -1 else -1) for l in zip(examples['label_1'],  examples['label_2'])]
+        # Map labels to ids
+        result["label"] = [l1*l2 if l1 != -1 and l2 != -1 else -1 for l1, l2 in zip(examples[label_1_key],  examples[label_2_key])]
         return result
 
     with training_args.main_process_first(desc="dataset map pre-processing"):
@@ -490,6 +499,7 @@ def main():
             preprocess_function,
             batched=True,
             num_proc=data_args.preprocessing_num_workers,
+            remove_columns=column_names,
             load_from_cache_file=not data_args.overwrite_cache,
             desc="Running tokenizer on dataset",
         )
@@ -516,11 +526,6 @@ def main():
         if data_args.max_predict_samples is not None:
             max_predict_samples = min(len(predict_dataset), data_args.max_predict_samples)
             predict_dataset = predict_dataset.select(range(max_predict_samples))
-
-    # Log a few random samples from the training set:
-    if training_args.do_train:
-        for index in random.sample(range(len(train_dataset)), 3):
-            logger.info(f"Sample {index} of the training set: {train_dataset[index]}.")
 
     # Get the metric function
     if data_args.task_name is not None:
