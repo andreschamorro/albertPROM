@@ -115,6 +115,12 @@ class DataTrainingArguments:
             "help": "The percentage of the train set used as validation set in case there's no validation split"
         },
     )
+    test_split_percentage: Optional[int] = field(
+        default=50,
+        metadata={
+            "help": "The percentage of the train set used as validation set in case there's no validation split"
+        },
+    )
     overwrite_cache: bool = field(
         default=False, metadata={"help": "Overwrite the cached preprocessed datasets or not."}
     )
@@ -315,22 +321,31 @@ def main():
                 cache_dir=model_args.cache_dir,
                 use_auth_token=True if model_args.use_auth_token else None,
             ).shuffle()
-            raw_datasets["test"] = load_dataset(
-                DATASET_TYPES[data_args.dataset_name],
-                data_args.dataset_config_name,
-                split=f"train[{data_args.validation_split_percentage}%:{2*data_args.validation_split_percentage}%]",
-                data_dir=data_args.dataset_dir,
-                cache_dir=model_args.cache_dir,
-                use_auth_token=True if model_args.use_auth_token else None,
-            ).shuffle()
             raw_datasets["train"] = load_dataset(
                 DATASET_TYPES[data_args.dataset_name],
                 data_args.dataset_config_name,
-                split=f"train[{2*data_args.validation_split_percentage}%:]",
+                split=f"train[{data_args.validation_split_percentage}%:]",
                 data_dir=data_args.dataset_dir,
                 cache_dir=model_args.cache_dir,
                 use_auth_token=True if model_args.use_auth_token else None,
             ).shuffle()
+        if "test" not in raw_datasets.keys():
+            raw_datasets["test"] = load_dataset(
+                DATASET_TYPES[data_args.dataset_name],
+                data_args.dataset_config_name,
+                split=f"validation[:{data_args.test_split_percentage}%]",
+                data_dir=data_args.dataset_dir,
+                cache_dir=model_args.cache_dir,
+                use_auth_token=True if model_args.use_auth_token else None,
+            )
+            raw_datasets["validation"] = load_dataset(
+                DATASET_TYPES[data_args.dataset_name],
+                data_args.dataset_config_name,
+                split=f"validation[{data_args.test_split_percentage}%:]",
+                data_dir=data_args.dataset_dir,
+                cache_dir=model_args.cache_dir,
+                use_auth_token=True if model_args.use_auth_token else None,
+            )
     else:
         # Loading a dataset from your local files.
         # CSV/JSON training and evaluation files are needed.
