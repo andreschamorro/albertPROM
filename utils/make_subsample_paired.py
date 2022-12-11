@@ -65,11 +65,11 @@ except FileExistsError:
 with open(os.path.join(d_prefix, f"train_paired_R1.fq"), "w") as r1_file:
     SeqIO.write([train_fold[i][0] for i in range(len(train_fold))], r1_file, "fastq")
 with open(os.path.join(d_prefix, f"train_paired_R2.fq"), "w") as r2_file:
-    SeqIO.write([train_fold[i][1] for i in range(len(train_fold))], r1_file, "fastq")
+    SeqIO.write([train_fold[i][1] for i in range(len(train_fold))], r2_file, "fastq")
 
 with open(os.path.join(d_prefix, f"test_paired_R1.fq"), "w") as r1_file:
     SeqIO.write([test_fold[i][0] for i in range(len(test_fold))], r1_file, "fastq")
 with open(os.path.join(d_prefix, f"test_paired_R2.fq"), "w") as r2_file:
-    SeqIO.write([test_fold[i][1] for i in range(len(test_fold))], r1_file, "fastq")
+    SeqIO.write([test_fold[i][1] for i in range(len(test_fold))], r2_file, "fastq")
 
 print("Done")
