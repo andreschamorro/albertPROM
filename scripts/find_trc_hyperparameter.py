@@ -27,6 +27,7 @@ import sys
 from dataclasses import dataclass, field
 from itertools import chain
 from typing import Optional, List, Union
+import numpy as np
 
 import datasets
 from datasets import load_dataset
@@ -637,7 +638,7 @@ def main():
                 checkpoint_score_attr="training_iteration",
                 progress_reporter=reporter,
                 local_dir="~/ray_results/",
-                name="tune_transformer_mlm",
+                name="tune_transformer_trc",
                 log_to_file=True,
         )
         print("Best trial hyperparameter: {}".format(best_run.hyperparameters))
