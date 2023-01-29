@@ -603,7 +603,7 @@ def main():
         tune_config = {
                 "per_device_train_batch_size": 16,
                 "per_device_eval_batch_size": 16,
-                "num_train_epochs": tune.choice([5, 10, 20]),
+                "num_train_epochs": 10,
                 "max_steps": -1,  # Used for smoke test.
         }
 
