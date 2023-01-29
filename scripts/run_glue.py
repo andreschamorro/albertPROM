@@ -528,10 +528,7 @@ def main():
             predict_dataset = predict_dataset.select(range(max_predict_samples))
 
     # Get the metric function
-    if data_args.task_name is not None:
-        metric = evaluate.load("glue", task_to_glue[data_args.task_name])
-    else:
-        metric = evaluate.load("accuracy")
+    metric = evaluate.combine(["accuracy", "recall", "precision", "f1"])
 
     # You can define your custom compute_metrics function. It takes an `EvalPrediction` object (a namedtuple with a
     # predictions and label_ids field) and has to return a dictionary string to float.

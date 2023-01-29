@@ -601,7 +601,7 @@ def main():
         # trainer.save_metrics("eval", metrics)
     
         tune_config = {
-                "per_device_train_batch_size": tune.choice([8, 16]),
+                "per_device_train_batch_size": 16,
                 "per_device_eval_batch_size": 16,
                 "num_train_epochs": tune.choice([5, 10, 20]),
                 "max_steps": -1,  # Used for smoke test.
@@ -615,6 +615,7 @@ def main():
                 hyperparam_mutations={
                     "weight_decay": tune.uniform(0.0, 0.3),
                     "learning_rate": tune.uniform(1e-5, 5e-4),
+                    "per_device_train_batch_size": [8, 16],
                     },
         )
 
@@ -636,13 +637,16 @@ def main():
                 scheduler=scheduler,
                 keep_checkpoints_num=1,
                 checkpoint_score_attr="training_iteration",
+                stop={"mean_accuracy": 0.96},
                 progress_reporter=reporter,
                 local_dir="~/ray_results/",
                 name="tune_transformer_trc",
                 log_to_file=True,
         )
         print("Best trial hyperparameter: {}".format(best_run.hyperparameters))
+        print("Best trial checkpoint: {}".format(best_run.checkpoint))
         print("Best objetive that was obtained for this run: {}".format(best_run.objective))
+        best_run.get_dataframe().to_csv(os.path.join(training_args.output_dir, f"best_run_{task}.csv"))
 
     kwargs = {"finetuned_from": model_args.model_name_or_path, "tasks": "sst2"}
     if data_args.dataset_name is not None:
