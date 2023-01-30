@@ -29,6 +29,7 @@ import sys
 from dataclasses import dataclass, field
 from itertools import chain
 from typing import Optional, List
+from functools import partial
 
 import datasets
 from datasets import load_dataset
@@ -89,7 +90,11 @@ def update_from_string(old: dict, update_str: str):
         old[k] = v
 
 def _kmer_split(k: int, sequence: str) -> List[str]:
-        return [sequence[j: j + k] for j in range(len(sequence) - k + 1)]
+    return [sequence[j: j + k] for j in range(len(sequence) - k + 1)]
+
+def _kmer_split_mlm(k: int, sequence: str, mask_token, mlm_probability) -> List[str]:
+    mask = np.where(np.random.binomial(1, mlm_probability, (len(sequence) - k + 1),))[0]
+    return [mask_token if j in mask else sequence[j: j + k] for j in range(len(sequence) - k + 1)]
 
 @dataclass
 class ModelArguments:
@@ -198,6 +203,10 @@ class DataTrainingArguments:
     preprocessing_num_workers: Optional[int] = field(
         default=None,
         metadata={"help": "The number of processes to use for the preprocessing."},
+    )
+    pre_mlm: bool = field(
+        default=False,
+        metadata={"help": ""},
     )
     mlm_probability: float = field(
         default=0.15, metadata={"help": "Ratio of tokens to mask for masked language modeling loss"}
@@ -428,13 +437,14 @@ def main():
                 f"model ({tokenizer.model_max_length}). Using max_seq_length={tokenizer.model_max_length}."
             )
         max_seq_length = min(data_args.max_seq_length, tokenizer.model_max_length)
+    kmer_split = partial(_kmer_split_mlm, mask_token=tokenizer.mask_token, mlm_probability=data_args.mlm_probability) if data_args.pre_mlm else partial(_kmer_split)
     if data_args.dataset_name == "ngs":
         # TODO group for reads > max_length
         padding = "max_length" if data_args.pad_to_max_length else False
         if data_args.read_by_read:
 
             def tokenize_function(examples):
-                kmer_example = [list(map(lambda r:" ".join(_kmer_split(model_args.model_ksize, r)), z)) for z in zip(*[examples[fn] for fn in features_names])]
+                kmer_example = [list(map(lambda r:" ".join(kmer_split(model_args.model_ksize, r)), z)) for z in zip(*[examples[fn] for fn in features_names])]
                 return tokenizer(
                     kmer_example,
                     padding=padding,
@@ -459,7 +469,9 @@ def main():
             # We use `return_special_tokens_mask=True` because DataCollatorForLanguageModeling (see below) is more
             # efficient when it receives the `special_tokens_mask`.
             def tokenize_function(examples):
-                kmer_example = [f" {tokenizer.sep_token} ".join([" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), z)]) for z in zip(*[examples[fn] for fn in features_names])]
+                kmer_example = [f" {tokenizer.sep_token} ".join(
+                    [" ".join(kr) for kr in map(lambda r: kmer_split(model_args.model_ksize, r), z)])
+                                for z in zip(*[examples[fn] for fn in features_names])]
                 return tokenizer(
                     kmer_example,
                     padding=padding,
@@ -484,7 +496,7 @@ def main():
         # We use `return_special_tokens_mask=True` because DataCollatorForLanguageModeling (see below) is more
         # efficient when it receives the `special_tokens_mask`.
         def tokenize_function(examples):
-            kmer_example = [f" {tokenizer.sep_token} ".join([" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), z)]) for z in zip(*[examples[fn] for fn in features_names])]
+            kmer_example = [f" {tokenizer.sep_token} ".join([" ".join(kr) for kr in map(lambda r: kmer_split(model_args.model_ksize, r), z)]) for z in zip(*[examples[fn] for fn in features_names])]
             return tokenizer(kmer_example, return_special_tokens_mask=True)
         with training_args.main_process_first(desc="dataset map tokenization"):
             tokenized_datasets = raw_datasets.map(
@@ -552,7 +564,7 @@ def main():
                 logits = logits[0]
             return logits.argmax(dim=-1)
 
-        metric = evaluate.load("accuracy")
+        metric = evaluate.combine(["accuracy", "recall", "precision", "f1"])
 
         def compute_metrics(eval_preds):
             preds, labels = eval_preds
@@ -570,6 +582,7 @@ def main():
     pad_to_multiple_of_8 = data_args.read_by_read and training_args.fp16 and not data_args.pad_to_max_length
     data_collator = DataCollatorForLanguageModeling(
         tokenizer=tokenizer,
+        mlm=not data_args.pre_mlm,
         mlm_probability=data_args.mlm_probability,
         pad_to_multiple_of=8 if pad_to_multiple_of_8 else None,
     )

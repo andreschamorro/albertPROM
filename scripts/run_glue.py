@@ -73,10 +73,7 @@ logger = logging.getLogger(__name__)
 DATASET_TYPES = {"rds": "loaders/reads_script.py", "ngs": "loaders/ngs_script.py", "wtr": "loaders/trns_script.py"}
 
 def _kmer_split(k: int, sequence: str) -> List[str]:
-    return " ".join([sequence[j: j + k] for j in range(len(sequence) - k + 1)])
-
-def batch_split(k: int, batch: List[str]) -> List[str]:
-    return list(map(lambda r: _kmer_split(k, r), batch))
+    return [sequence[j: j + k] for j in range(len(sequence) - k + 1)]
 
 @dataclass
 class DataTrainingArguments:
@@ -485,9 +482,6 @@ def main():
         kmer_example = [f" {tokenizer.sep_token} ".join(
             [" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), z)]) 
                         for z in zip(examples[read_1_key],  examples[read_2_key])]
-        #args = (
-        #        (batch_split(model_args.model_ksize, examples[read_1_key]),) if read_2_key is None else (batch_split(model_args.model_ksize, examples[read_1_key]), batch_split(model_args.model_ksize, examples[read_2_key]))
-        #)
         result = tokenizer(kmer_example, padding=padding, max_length=max_seq_length, truncation=True)
         # Map labels to ids
         result["label"] = [l1*l2 if l1 != -1 and l2 != -1 else -1 for l1, l2 in zip(examples[label_1_key],  examples[label_2_key])]
