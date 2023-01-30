@@ -542,11 +542,11 @@ def main():
         eval_dataset = raw_datasets["validation"]
         if data_args.max_eval_samples is not None:
             max_eval_samples = min(len(eval_dataset), data_args.max_eval_samples)
-            eval_dataset = eval_dataset.select(range(max_eval_samples))
+            eval_dataset = eval_dataset.shuffle().select(range(max_eval_samples))
 
     # Get the metric function
     if data_args.task_name is not None:
-        metric = evaluate.load("glue", task_to_glue[data_args.task_name])
+        metric = evaluate.combine(["accuracy", "recall", "precision", "f1"])
     else:
         metric = evaluate.load("accuracy")
 
@@ -626,7 +626,7 @@ def main():
                     "per_device_train_batch_size": "train_bs/cpu",
                     "num_train_epochs": "num_epochs",
                 },
-                metric_columns=["eval_accuracy", "eval_loss", "epoch", "time_total_s", "training_iteration"],
+                metric_columns=["eval_accuracy", "eval_recall", "eval_f1", "epoch", "time_since_restore"],
         )
 
         best_run = trainer.hyperparameter_search(
@@ -647,6 +647,7 @@ def main():
         print("Best trial checkpoint: {}".format(best_run.checkpoint))
         print("Best objetive that was obtained for this run: {}".format(best_run.objective))
         best_run.get_dataframe().to_csv(os.path.join(training_args.output_dir, f"best_run_{task}.csv"))
+        trainer.save_model()  # Saves the tokenizer too for easy upload
 
     kwargs = {"finetuned_from": model_args.model_name_or_path, "tasks": "sst2"}
     if data_args.dataset_name is not None:

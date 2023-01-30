@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
 usage:
-    $  ./make_kfold_paired.py PRESENCE_PREFIX ABSENCE_PREFIX SAMPLE_DIR N_SAMPLE 
+    $  ./make_subsample_paired.py PRESENCE_PREFIX ABSENCE_PREFIX SAMPLE_DIR N_SAMPLE RATIO 
 """
 import sys, os, random
 from heapq import nlargest
@@ -15,6 +15,7 @@ p_prefix = sys.argv[1]
 a_prefix = sys.argv[2]
 d_prefix = sys.argv[3]
 n_sample = int(sys.argv[4])
+ratio = int(sys.argv[5])
 
 prid_processing = lambda i: i
 abid_processing = lambda i: i.split('|')[0] + i.split('-')[-1]
@@ -51,6 +52,7 @@ print(f"absence count: {ab_count}")
 print("All sample processed")
 r_index = random.sample(range(pr_count), n_sample if n_sample < pr_count else pr_count)
 all_features = [p_features[i] for i in r_index]
+n_sample = n_sample * ratio if n_sample > 0 else pr_count * ratio
 r_index = random.sample(range(ab_count), n_sample if n_sample < ab_count else ab_count)
 all_features.extend([a_features[i] for i in r_index])
 print("Write sample ...")
