@@ -57,6 +57,7 @@ _FILES = {
     "single" : "single_R.fq",
     "train_paired" : ["train_paired_R1.fq", "train_paired_R2.fq"],
     "valid_paired" : ["valid_paired_R1.fq", "valid_paired_R2.fq"],
+    "tests_paired" : ["tests_paired_R1.fq", "tests_paired_R2.fq"],
 }
 
 _LABELS = {
@@ -174,6 +175,12 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
                     raise FileNotFoundError(
                         f"{file} does not exist. Make sure you insert a manual dir that includes the file name {file}. Manual download instructions: {self.manual_download_instructions})"
                     )
+            fastq_test = [os.path.join(data_dir, file) for file in _FILES['tests_paired']]
+            for file in fastq_test:
+                if not os.path.exists(file):
+                    raise FileNotFoundError(
+                        f"{file} does not exist. Make sure you insert a manual dir that includes the file name {file}. Manual download instructions: {self.manual_download_instructions})"
+                    )
         else:
             fastq_train = os.path.join(data_dir, _FILES['single'])
             if not os.path.exists(fastq_file):
@@ -182,7 +189,7 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
                 )
             fastq_valid = None
 
-        return fastq_train, fastq_valid
+        return fastq_train, fastq_valid, fastq_test
 
     def _info(self):
         if self.config.name.startswith("single"):  # This is the name of the configuration selected in BUILDER_CONFIGS above
@@ -230,7 +237,7 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
         )
 
     def _split_generators(self, dl_manager):
-        fastq_train, fastq_valid = self._preprocessing(dl_manager)
+        fastq_train, fastq_valid, fastq_test = self._preprocessing(dl_manager)
 
         return [
             datasets.SplitGenerator(
@@ -247,6 +254,14 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
                 gen_kwargs={
                     "fastq": fastq_valid,
                     "split": "validation"
+                },
+            ),
+            datasets.SplitGenerator(
+                name=datasets.Split.TEST,
+                # These kwargs will be passed to _generate_examples
+                gen_kwargs={
+                    "fastq": fastq_test,
+                    "split": "test"
                 },
             ),
         ]

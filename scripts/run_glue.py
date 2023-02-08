@@ -315,6 +315,7 @@ def main():
             use_auth_token=True if model_args.use_auth_token else None,
         ).shuffle()
         if "validation" not in raw_datasets.keys():
+            logger.info("Not Validation dataset, split from train dataset")
             raw_datasets["validation"] = load_dataset(
                 DATASET_TYPES[data_args.dataset_name],
                 data_args.dataset_config_name,
@@ -332,6 +333,7 @@ def main():
                 use_auth_token=True if model_args.use_auth_token else None,
             ).shuffle()
         if "test" not in raw_datasets.keys():
+            logger.info("Not Testing dataset, split from validation dataset")
             raw_datasets["test"] = load_dataset(
                 DATASET_TYPES[data_args.dataset_name],
                 data_args.dataset_config_name,
@@ -434,7 +436,6 @@ def main():
         cache_dir=model_args.cache_dir,
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
-        ignore_mismatched_sizes=model_args.ignore_mismatched_sizes,
     )
 
     # Preprocessing the raw_datasets
@@ -502,7 +503,7 @@ def main():
         train_dataset = raw_datasets["train"]
         if data_args.max_train_samples is not None:
             max_train_samples = min(len(train_dataset), data_args.max_train_samples)
-            train_dataset = train_dataset.select(range(max_train_samples))
+            train_dataset = train_dataset.select(random.sample(range(len(train_dataset)), k=max_train_samples))
 
     if training_args.do_eval:
         if "validation" not in raw_datasets and "validation_matched" not in raw_datasets:
@@ -510,7 +511,7 @@ def main():
         eval_dataset = raw_datasets["validation_matched" if data_args.task_name == "mnli" else "validation"]
         if data_args.max_eval_samples is not None:
             max_eval_samples = min(len(eval_dataset), data_args.max_eval_samples)
-            eval_dataset = eval_dataset.select(range(max_eval_samples))
+            eval_dataset = eval_dataset.shuffle().select(range(max_eval_samples))
 
     if training_args.do_predict or data_args.task_name is not None or data_args.test_file is not None:
         if "test" not in raw_datasets and "test_matched" not in raw_datasets:
