@@ -36,7 +36,8 @@ with open(f"{p_prefix}1.fq", "r") as pr1_file, open(f"{p_prefix}1.fq", "r") as p
         pr_count += 1
 
 print(f"presence count: {pr_count}")
-r_index = random.sample(range(pr_count), n_sample if n_sample < pr_count else pr_count)
+n_sample = n_sample if (n_sample < pr_count and n_sample > 0) else pr_count
+r_index = random.sample(range(pr_count), n_sample)
 all_features = [p_features[i] for i in r_index]
 n_sample = n_sample * ratio if n_sample > 0 else pr_count * ratio
 print("absence processing ...")
@@ -47,8 +48,7 @@ with open(f"{a_prefix}1.fq", "r") as ar1_file:
         ab_count += 1
 print(f"absence count: {ab_count}")
 
-n_sample = n_sample if (n_sample < ab_count and n_sample > 0) else ab_count
-r_index = random.sample(range(ab_count), n_sample)
+r_index = random.sample(range(ab_count), n_sample if n_sample < ab_count else ab_count)
 with open(f"{a_prefix}1.fq", "r") as ar1_file, open(f"{a_prefix}2.fq", "r") as ar2_file:
     for i, (r1, r2) in enumerate(zip(SeqIO.parse(ar1_file, "fastq"), SeqIO.parse(ar2_file, "fastq"))):
         if i in r_index:
