@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from itertools import chain
 from typing import Optional, List
 from functools import partial
+import numpy as np
 
 import datasets
 from datasets import load_dataset
@@ -564,7 +565,7 @@ def main():
                 logits = logits[0]
             return logits.argmax(dim=-1)
 
-        metric = evaluate.combine(["accuracy", "recall", "precision", "f1"])
+        metric = evaluate.load("accuracy")
 
         def compute_metrics(eval_preds):
             preds, labels = eval_preds

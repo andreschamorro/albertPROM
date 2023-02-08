@@ -443,14 +443,13 @@ def main():
             "You can do it from another script, save it, and load it from here, using --tokenizer_name."
         )
     def get_model():
-        model = AlbertForWeightedSequenceClassification.from_pretrained(
+        model = AutoModelForSequenceClassification.from_pretrained(
             model_args.model_name_or_path,
             from_tf=bool(".ckpt" in model_args.model_name_or_path),
             config=config,
             cache_dir=model_args.cache_dir,
             revision=model_args.model_revision,
             use_auth_token=True if model_args.use_auth_token else None,
-            loss_weight=model_args.model_loss_weight,
             )
         model.config.label2id = {l: i for i, l in enumerate(label_list)}
         model.config.id2label = {id: label for label, id in config.label2id.items()}
@@ -603,7 +602,7 @@ def main():
         tune_config = {
                 "per_device_train_batch_size": 16,
                 "per_device_eval_batch_size": 16,
-                "num_train_epochs": 10,
+                "num_train_epochs": tune.choice([5, 10]),
                 "max_steps": -1,  # Used for smoke test.
         }
 
@@ -637,7 +636,7 @@ def main():
                 scheduler=scheduler,
                 keep_checkpoints_num=1,
                 checkpoint_score_attr="training_iteration",
-                stop={"mean_accuracy": 0.96},
+                stop={"eval_accuracy": 0.96},
                 progress_reporter=reporter,
                 local_dir="~/ray_results/",
                 name="tune_transformer_trc",
