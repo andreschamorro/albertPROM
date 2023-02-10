@@ -25,7 +25,11 @@ from typing import Optional, List, Union
 
 import datasets
 import numpy as np
+from sklearn.model_selection import KFold
 from datasets import load_dataset
+
+from ray.tune.schedulers import PopulationBasedTrainingReplay
+from ray import air, tune
 
 import evaluate
 import transformers
@@ -74,6 +78,24 @@ DATASET_TYPES = {"rds": "loaders/reads_script.py", "ngs": "loaders/ngs_script.py
 
 def _kmer_split(k: int, sequence: str) -> List[str]:
     return [sequence[j: j + k] for j in range(len(sequence) - k + 1)]
+
+@dataclass
+class GlueTrainingArguments(TrainingArguments):
+    """
+    Arguments pertaining to what task we are going to input our model for training and eval.
+
+    Using `HfArgumentParser` we can turn this class
+    into argparse arguments to be able to specify them on
+    the command line.
+    """
+    k_fold: Optional[int] = field(
+        default=None,
+        metadata={"help": "."},
+    )
+    ptb_policy_file: Optional[str] = field(
+        default=None,
+        metadata={"help": "The PBT policy file. Usually this is stored in ~/ray_results/experiment_name/pbt_policy_xxx.txt where xxx is the trial ID"},
+    )
 
 @dataclass
 class DataTrainingArguments:
@@ -242,7 +264,7 @@ def main():
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
 
-    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments))
+    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, GlueTrainingArguments))
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
         # If we pass only one argument to the script and it's the path to a json file,
         # let's parse it to get our arguments.
@@ -497,7 +519,7 @@ def main():
             load_from_cache_file=not data_args.overwrite_cache,
             desc="Running tokenizer on dataset",
         )
-    if training_args.do_train:
+    if training_args.do_train or (training_args.k_fold is not None):
         if "train" not in raw_datasets:
             raise ValueError("--do_train requires a train dataset")
         train_dataset = raw_datasets["train"]
@@ -560,7 +582,7 @@ def main():
     )
 
     # Training
-    if training_args.do_train:
+    if training_args.do_train and (training_args.ptb_policy_file is None):
         logger.info("*** Training ***")
         checkpoint = None
         if training_args.resume_from_checkpoint is not None:
@@ -639,6 +661,76 @@ def main():
                         else:
                             item = label_list[item]
                             writer.write(f"{index}\t{item}\n")
+
+    if training_args.ptb_policy_file is not None:
+        if ray.is_initialized():
+            ray.shutdown()
+        ray.init()
+        replay = PopulationBasedTrainingReplay(training_args.ptb_policy_file)
+        tuner = tune.Tuner(
+                trainer,
+                run_config=air.RunConfig(
+                    stop={"eval_accuracy": 0.96}
+                ),
+                tune_config=tune.TuneConfig(
+                    scheduler=replay,
+                ),
+        )
+        tuner.fit()
+        # Get the best trial result
+        best_result = results_grid.get_best_result(metric="mean_accuracy", mode="max")
+
+        # Print `log_dir` where checkpoints are stored
+        print('Best result logdir:', best_result.log_dir)
+
+        # Print the best trial `config` reported at the last iteration
+        # NOTE: This config is just what the trial ended up with at the last iteration.
+        # See the next section for replaying the entire history of configs.
+        print('Best final iteration hyperparameter config:\n', best_result.config)
+
+        # Plot the learning curve for the best trial
+        best_result.metrics_dataframe.to_csv(os.path.join(training_args.output_dir, f"best_run_{task}.csv"))
+        trainer.save_model()  # Saves the tokenizer too for easy upload
+        trainer.save_state()
+
+    if training_args.k_fold is not None:
+        kf = KFold(n_splits=training_args.k_fold, random_state=seed, shuffle=True)
+        results = []
+        args = training_args
+        for k, (train_index, val_index) in enumerate(kf.split(train_data["label"])):
+        	# splitting Dataframe (dataset not included)
+            train_k_dataset = train_dataset.select(train_index)
+            eval_k_dataset = train_dataset.select(val_index)
+            args.output_dir = os.path.join(training_args.output_dir, f"output_results_{k}")
+            # Defining Model
+            trainer = Trainer(
+                model=model,
+                args=args,
+                train_dataset=train_k_dataset,
+                eval_dataset=None,
+                compute_metrics=compute_metrics,
+                tokenizer=tokenizer,
+                data_collator=data_collator,
+            )
+        	# train the model
+            train_result = trainer.train(resume_from_checkpoint=checkpoint)
+            metrics = train_result.metrics
+            metrics["train_samples"] = len(train_k_dataset)
+
+            trainer.save_model()  # Saves the tokenizer too for easy upload
+
+        	# validate the model
+            eval_metrics = trainer.evaluate(eval_dataset=eval_dataset)
+            metrics.add(eval_metrics)
+
+            trainer.log_metrics("train", metrics)
+            trainer.save_metrics("train", metrics)
+            trainer.save_state()
+        	# append model score
+            results.append(metrics['eval_accuracy'])
+
+        logger.info(f"***** K-Fold results {task} *****")
+        logger.info(f"Mean precision {sum(results)/len(results)}")
 
     kwargs = {"finetuned_from": model_args.model_name_or_path, "tasks": "text-classification"}
     if data_args.task_name is not None:
