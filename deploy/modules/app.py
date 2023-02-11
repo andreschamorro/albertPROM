@@ -2,6 +2,7 @@ import os
 import requests
 import json
 from io import BytesIO
+from typing import Optional, List
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
