@@ -32,7 +32,7 @@ class SequenceResponse(BaseModel):
 
 @app.post("/transcript", response_model=SequenceResponse)
 def predict(request: SequenceRequest):
-    inference = pipe(preprocess_function(request.read_1, request.read_2))
+    inference = pipe(preprocess_function(request.read_1, request.read_2))[0]
     return SequenceResponse(
         label=inference['label'], confidence=inference['score']
     )
