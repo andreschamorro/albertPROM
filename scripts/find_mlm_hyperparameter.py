@@ -550,7 +550,7 @@ def main():
                 logits = logits[0]
             return logits.argmax(dim=-1)
 
-        metric = evaluate.combine(["accuracy", "recall", "precision", "f1"])
+        metric = evaluate.combine(["accuracy", "perplexity"])
 
         def compute_metrics(eval_preds):
             preds, labels = eval_preds
@@ -604,10 +604,9 @@ def main():
         # trainer.save_metrics("eval", metrics)
     
         tune_config = {
-                "per_device_train_batch_size": tune.choice([8, 16]),
+                "per_device_train_batch_size": 16,
                 "per_device_eval_batch_size": 16,
-                "num_train_epochs": tune.choice([2, 3]),
-                "--config_overrides hidden_size": tune.choice([512, 768, 1024]),
+                "num_train_epochs": tune.choice([5, 10]),
                 "max_steps": -1,  # Used for smoke test.
         }
 
@@ -630,7 +629,7 @@ def main():
                     "per_device_train_batch_size": "train_bs/cpu",
                     "num_train_epochs": "num_epochs",
                 },
-                metric_columns=["eval_accuracy", "eval_recall", "eval_f1", "epoch", "time_since_restore"],
+                metric_columns=["eval_accuracy", "eval_perplexity", "epoch", "time_since_restore"],
         )
 
         best_run = trainer.hyperparameter_search(
