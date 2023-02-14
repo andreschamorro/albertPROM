@@ -54,10 +54,12 @@ _URLS = {
 }
 
 _FILES = {
-    "single" : "single_R.fq",
-    "train_paired" : ["train_paired_R1.fq", "train_paired_R2.fq"],
-    "valid_paired" : ["valid_paired_R1.fq", "valid_paired_R2.fq"],
-    "tests_paired" : ["tests_paired_R1.fq", "tests_paired_R2.fq"],
+        "train_single" : "train_single.fq",
+        "valid_single" : "valid_single.fq",
+        "tests_single" : "tests_single.fq",
+        "train_paired" : ["train_paired_R1.fq", "train_paired_R2.fq"],
+        "valid_paired" : ["valid_paired_R1.fq", "valid_paired_R2.fq"],
+        "tests_paired" : ["tests_paired_R1.fq", "tests_paired_R2.fq"],
 }
 
 _LABELS = {
