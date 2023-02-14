@@ -55,6 +55,7 @@ _URLS = {
 
 _FILES = {
     "transcript": "gencode.v41.transcripts.fa.gz", 
+    "transcript_single": "transcripts.fq",
     "transcript_ext": ["transcripts_R1.fq", "transcripts_R2.fq"],
     "whole_genome": "hg38.fa.gz"
 }
@@ -140,6 +141,11 @@ class NGSDataset(datasets.GeneratorBasedBuilder):
             description="External simulator for reads", 
             reads_names=["read_1", "read_2"], 
             num_read=None),
+        NGSConfig(name="transcript_single", 
+            version=VERSION, 
+            description="External simulator for reads", 
+            reads_names="read_1", 
+            num_read=None),
     ]
 
     def _preprocessing(self, dl_manager):
@@ -158,6 +164,12 @@ class NGSDataset(datasets.GeneratorBasedBuilder):
                     raise FileNotFoundError(
                         f"{file} does not exist. Make sure you insert a manual dir that includes the file name {f}. Manual download instructions: {self.manual_download_instructions})"
                     )
+        elif self.config.name.endswith('_single'):
+            ref_file = os.path.join(data_dir, _FILES[self.config.name])
+            if not os.path.exists(ref_file):
+                raise FileNotFoundError(
+                    f"{file} does not exist. Make sure you insert a manual dir that includes the file name {f}. Manual download instructions: {self.manual_download_instructions})"
+                )
         else:
             ref_file = os.path.join(data_dir, _FILES[self.config.name])
             if not os.path.exists(ref_file):
@@ -173,6 +185,14 @@ class NGSDataset(datasets.GeneratorBasedBuilder):
                 {
                     "read_1": datasets.Value("string"),
                     "read_2": datasets.Value("string"),
+                    "transcript_src": datasets.Value("string"),
+                    # These are the features of your dataset like images, labels ...
+                }
+            )
+        elif self.config.name == "transcript_single":  # This is the name of the configuration selected in BUILDER_CONFIGS above
+            features = datasets.Features(
+                {
+                    "read_1": datasets.Value("string"),
                     "transcript_src": datasets.Value("string"),
                     # These are the features of your dataset like images, labels ...
                 }
@@ -227,6 +247,13 @@ class NGSDataset(datasets.GeneratorBasedBuilder):
                             "read_1": r1.seq,
                             "read_2": r2.seq,
                             "transcript_src": r1.id.split('-')[0], # ART style read sep
+                            }
+        if self.config.name.endswith('_single'):
+            with open(reference, 'r') as r_file:
+                for i, r in enumerate(SeqIO.parse(r_file, 'fastq')):
+                    yield i, {
+                            "read_1": r.seq,
+                            "transcript_src": r.id.split('-')[0], # ART style read sep
                             }
         if self.config.name == "transcript":
             for i, (sid, r1, r2) in enumerate(ngsim.readgen(reference, size=self.config.num_read, 
