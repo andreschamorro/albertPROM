@@ -504,18 +504,27 @@ def main():
             )
         max_seq_length = min(data_args.max_seq_length, tokenizer.model_max_length)
 
-    def preprocess_function(examples):
-        # Tokenize the reads
-        kmer_example = [f" {tokenizer.sep_token} ".join(
-            [" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), z)]) 
-                        for z in zip(examples[read_1_key],  examples[read_2_key])]
-        #args = (
-        #        (batch_split(model_args.model_ksize, examples[read_1_key]),) if read_2_key is None else (batch_split(model_args.model_ksize, examples[read_1_key]), batch_split(model_args.model_ksize, examples[read_2_key]))
-        #)
-        result = tokenizer(kmer_example, padding=padding, max_length=max_seq_length, truncation=True)
-        # Map labels to ids
-        result["label"] = [l1*l2 if l1 != -1 and l2 != -1 else -1 for l1, l2 in zip(examples[label_1_key],  examples[label_2_key])]
-        return result
+    if data_args.dataset_config_name.startswith('single'):
+        def preprocess_function(examples):
+            # Tokenize the reads
+            kmer_example = [" ".join(kr) for kr in 
+                            map(lambda r: kmer_split(model_args.model_ksize, r), examples[read_1_key])]
+            result = tokenizer(kmer_example, padding=padding, max_length=max_seq_length, truncation=True)
+            # Map labels to ids
+            return result
+    else:
+        def preprocess_function(examples):
+            # Tokenize the reads
+            kmer_example = [f" {tokenizer.sep_token} ".join(
+                [" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), z)]) 
+                            for z in zip(examples[read_1_key],  examples[read_2_key])]
+            #args = (
+            #        (batch_split(model_args.model_ksize, examples[read_1_key]),) if read_2_key is None else (batch_split(model_args.model_ksize, examples[read_1_key]), batch_split(model_args.model_ksize, examples[read_2_key]))
+            #)
+            result = tokenizer(kmer_example, padding=padding, max_length=max_seq_length, truncation=True)
+            # Map labels to ids
+            result["label"] = [l1*l2 if l1 != -1 and l2 != -1 else -1 for l1, l2 in zip(examples[label_1_key],  examples[label_2_key])]
+            return result
 
     with training_args.main_process_first(desc="dataset map pre-processing"):
         raw_datasets = raw_datasets.map(
