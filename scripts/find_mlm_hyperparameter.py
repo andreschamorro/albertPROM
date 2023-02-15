@@ -429,10 +429,10 @@ def main():
     if data_args.dataset_name == "ngs":
         # TODO group for reads > max_length
         padding = "max_length" if data_args.pad_to_max_length else False
-        if data_args.read_by_read:
+        if data_args.dataset_config_name.endswith('_single'):
 
             def tokenize_function(examples):
-                kmer_example = [list(map(lambda r:" ".join(_kmer_split(model_args.model_ksize, r)), z)) for z in zip(*[examples[fn] for fn in features_names])]
+                kmer_example = [" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), examples['read_1'])]
                 return tokenizer(
                     kmer_example,
                     padding=padding,
@@ -457,7 +457,9 @@ def main():
             # We use `return_special_tokens_mask=True` because DataCollatorForLanguageModeling (see below) is more
             # efficient when it receives the `special_tokens_mask`.
             def tokenize_function(examples):
-                kmer_example = [f" {tokenizer.sep_token} ".join([" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), z)]) for z in zip(*[examples[fn] for fn in features_names])]
+                kmer_example = [f" {tokenizer.sep_token} ".join(
+                    [" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), z)])
+                                for z in zip(*[examples[fn] for fn in features_names])]
                 return tokenizer(
                     kmer_example,
                     padding=padding,
