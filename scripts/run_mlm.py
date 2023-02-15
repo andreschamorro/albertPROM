@@ -442,10 +442,10 @@ def main():
     if data_args.dataset_name == "ngs":
         # TODO group for reads > max_length
         padding = "max_length" if data_args.pad_to_max_length else False
-        if data_args.read_by_read:
+        if data_args.dataset_config_name.endswith('_single'):
 
             def tokenize_function(examples):
-                kmer_example = [list(map(lambda r:" ".join(kmer_split(model_args.model_ksize, r)), z)) for z in zip(*[examples[fn] for fn in features_names])]
+                kmer_example = [" ".join(kr) for kr in map(lambda r: kmer_split(model_args.model_ksize, r), examples['read_1'])]
                 return tokenizer(
                     kmer_example,
                     padding=padding,
@@ -463,7 +463,7 @@ def main():
                     num_proc=data_args.preprocessing_num_workers,
                     remove_columns=features_names,
                     load_from_cache_file=not data_args.overwrite_cache,
-                    desc="Running tokenizer on dataset read_by_read",
+                    desc="Running tokenizer on dataset single read",
                 )
         else:
             # Otherwise, we tokenize every text, then concatenate them together before splitting them in smaller parts.
