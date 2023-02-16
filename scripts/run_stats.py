@@ -379,24 +379,27 @@ def main():
     if data_args.dataset_name == "ngs":
         # TODO group for reads > max_length
         padding = "max_length" if data_args.pad_to_max_length else False
-        if data_args.read_by_read:
+        if data_args.dataset_config_name.endswith('_single'):
 
             def tokenize_function(examples):
-                kmer_example = [list(map(lambda r:" ".join(_kmer_split(model_args.model_ksize, r)), z)) for z in zip(*[examples[fn] for fn in features_names])]
-                return tokenizer(
+                kmer_example = [" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), examples['read_1'])]
+                results = tokenizer(
                     kmer_example,
                     padding=padding,
+                    truncation=True,
+                    max_length=max_seq_length,
                     # We use this option because DataCollatorForLanguageModeling (see below) is more efficient when it
                     # receives the `special_tokens_mask`.
                     return_special_tokens_mask=True,
                 )
+                results["kmers"] = kmer_example
+                return results
 
             with training_args.main_process_first(desc="dataset map tokenization"):
                 tokenized_datasets = raw_datasets.map(
                     tokenize_function,
                     batched=True,
                     num_proc=data_args.preprocessing_num_workers,
-                    remove_columns=features_names,
                     load_from_cache_file=not data_args.overwrite_cache,
                     desc="Running tokenizer on dataset read_by_read",
                 )
@@ -405,21 +408,24 @@ def main():
             # We use `return_special_tokens_mask=True` because DataCollatorForLanguageModeling (see below) is more
             # efficient when it receives the `special_tokens_mask`.
             def tokenize_function(examples):
-                kmer_example = [f" {tokenizer.sep_token} ".join([" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), z)]) for z in zip(*[examples[fn] for fn in features_names])]
-                return tokenizer(
+                kmer_example = [f" {tokenizer.sep_token} ".join(
+                    [" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), z)])
+                                for z in zip(*[examples[fn] for fn in features_names])]
+                results = tokenizer(
                     kmer_example,
                     padding=padding,
                     # We use this option because DataCollatorForLanguageModeling (see below) is more efficient when it
                     # receives the `special_tokens_mask`.
                     return_special_tokens_mask=True,
                 )
+                results["kmers"] = kmer_example
+                return results
 
             with training_args.main_process_first(desc="dataset map tokenization"):
                 tokenized_datasets = raw_datasets.map(
                     tokenize_function,
                     batched=True,
                     num_proc=data_args.preprocessing_num_workers,
-                    remove_columns=column_names,
                     load_from_cache_file=not data_args.overwrite_cache,
                     desc="Running tokenizer on every pairs in dataset",
                 )
@@ -440,13 +446,19 @@ def main():
                 desc="Running tokenizer on every sequence in dataset",
             )
 
+    # Log a few random samples from the training set:
+    for index in random.sample(range(len(tokenized_datasets)), min(3, len(tokenized_datasets))):
+        logger.info(f"Sample {index} of the training set: {raw_datasets['train'][index]['read_1']}.")
+        logger.info(f"Sample {index} of the training set: {tokenized_datasets['train'][index]}.")
+
     # Tokenizer stats
     if data_args.task_name == "cov":
         def countoken(l):
             return dict(Counter(list(map(lambda x: str(len(re.sub("[^actg\s]", "", x))), l))))
         def tokenize_stats(examples):
             stats = {}
-            stats['len'] = list(map(lambda e: len(e), examples['input_ids']))
+            stats['ids_len'] = list(map(lambda e: len(e), examples['input_ids']))
+            stats['mer_len'] = list(map(lambda e: len(e.split(' ')), examples['kmers']))
             # stats['countoken'] = list(map(lambda e: countoken(tokenizer.convert_ids_to_tokens(e, skip_special_tokens=True)),
             #                               examples['input_ids']))
             stats['countunks'] = list(map(lambda e: e.count(tokenizer.unk_token_id), examples['input_ids']))
@@ -457,7 +469,6 @@ def main():
                 tokenize_stats,
                 batched=True,
                 num_proc=data_args.preprocessing_num_workers,
-                remove_columns=tokenized_datasets["train"].column_names,
                 load_from_cache_file=not data_args.overwrite_cache,
                 desc="Running tokenizer on every sequence in dataset",
             )
