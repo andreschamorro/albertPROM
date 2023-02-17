@@ -641,7 +641,7 @@ def main():
                     "per_device_train_batch_size": "train_bs/cpu",
                     "num_train_epochs": "num_epochs",
                 },
-                metric_columns=["eval_accuracy", "epoch", "time_since_restore"],
+                metric_columns=["eval_accuracy", "eval_perplexity", "epoch", "time_since_restore"],
         )
 
         best_run = trainer.hyperparameter_search(
