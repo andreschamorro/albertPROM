@@ -452,7 +452,6 @@ def main():
         def tokenize_stats(examples):
             stats = {}
             stats['ids_len'] = list(map(lambda e: len(e), examples['input_ids']))
-            stats['mer_len'] = list(map(lambda e: len(e.split(' ')), examples['kmers']))
             # stats['countoken'] = list(map(lambda e: countoken(tokenizer.convert_ids_to_tokens(e, skip_special_tokens=True)),
             #                               examples['input_ids']))
             stats['countunks'] = list(map(lambda e: e.count(tokenizer.unk_token_id), examples['input_ids']))
