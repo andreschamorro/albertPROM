@@ -658,8 +658,8 @@ def main():
                 name="tune_transformer_mlm",
                 log_to_file=True,
         )
-        trainer.save_model()  # Saves the tokenizer too for easy upload
         print("Best trial hyperparameter: {}".format(best_run.hyperparameters))
+        trainer.save_model()  # Saves the tokenizer too for easy upload
         print("Best trial checkpoint: {}".format(best_run.checkpoint))
         # print("Best objetive that was obtained for this run: {}".format(best_run.objective))
         best_run.get_dataframe().to_csv(os.path.join(training_args.output_dir, f"best_run_{task}.csv"))
