@@ -567,7 +567,13 @@ def main():
             mask = labels != -100
             labels = labels[mask]
             preds = preds[mask]
-            return metric.compute(predictions=preds, references=labels)
+            result = metric.compute(predictions=preds, references=labels)
+            try:
+                perplexity = math.exp(result["eval_loss"])
+            except OverflowError:
+                perplexity = float("inf")
+            result["perplexity"] = perplexity
+            return result 
 
     # Data collator
     # This one will take care of randomly masking the tokens.
