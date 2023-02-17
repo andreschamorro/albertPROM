@@ -121,6 +121,10 @@ class ModelArguments:
         default=8,
         metadata={"help": "K size"},
     )
+    n_trials: Optional[int] = field(
+        default=64, 
+        metadata={"help": "trials number"},
+    )
     config_overrides: Optional[str] = field(
         default=None,
         metadata={
@@ -552,7 +556,7 @@ def main():
                 logits = logits[0]
             return logits.argmax(dim=-1)
 
-        metric = evaluate.combine(["accuracy", "perplexity"])
+        metric = evaluate.load("accuracy")
 
         def compute_metrics(eval_preds):
             preds, labels = eval_preds
@@ -606,8 +610,8 @@ def main():
         # trainer.save_metrics("eval", metrics)
     
         tune_config = {
-                "per_device_train_batch_size": 16,
-                "per_device_eval_batch_size": 16,
+                "per_device_train_batch_size": tune.choice([8, 16]),
+                "per_device_eval_batch_size": tune.choice([8, 16]),
                 "num_train_epochs": tune.choice([5, 10]),
                 "max_steps": -1,  # Used for smoke test.
         }
@@ -631,17 +635,18 @@ def main():
                     "per_device_train_batch_size": "train_bs/cpu",
                     "num_train_epochs": "num_epochs",
                 },
-                metric_columns=["eval_accuracy", "eval_perplexity", "epoch", "time_since_restore"],
+                metric_columns=["eval_accuracy", "epoch", "time_since_restore"],
         )
 
         best_run = trainer.hyperparameter_search(
                 hp_space=lambda _: tune_config,
                 backend="ray",
-                n_trials=64,
-                resources_per_trial={"cpu": 1, "gpu": 0},
+                n_trials=model_args.n_trials,
+                resources_per_trial={"cpu": 4, "gpu": 0},
                 scheduler=scheduler,
                 keep_checkpoints_num=1,
                 checkpoint_score_attr="training_iteration",
+                stop={"eval_accuracy": 0.96},
                 progress_reporter=reporter,
                 local_dir="~/ray_results/",
                 name="tune_transformer_mlm",
