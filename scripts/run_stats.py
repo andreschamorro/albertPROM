@@ -383,25 +383,21 @@ def main():
 
             def tokenize_function(examples):
                 kmer_example = [" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), examples['read_1'])]
-                results = tokenizer(
+                return tokenizer(
                     kmer_example,
-                    padding=padding,
-                    truncation=True,
-                    max_length=max_seq_length,
                     # We use this option because DataCollatorForLanguageModeling (see below) is more efficient when it
                     # receives the `special_tokens_mask`.
                     return_special_tokens_mask=True,
                 )
-                results["kmers"] = kmer_example
-                return results
 
             with training_args.main_process_first(desc="dataset map tokenization"):
                 tokenized_datasets = raw_datasets.map(
                     tokenize_function,
                     batched=True,
                     num_proc=data_args.preprocessing_num_workers,
+                    remove_columns=column_names,
                     load_from_cache_file=not data_args.overwrite_cache,
-                    desc="Running tokenizer on dataset read_by_read",
+                    desc="Running tokenizer on dataset single read",
                 )
         else:
             # Otherwise, we tokenize every text, then concatenate them together before splitting them in smaller parts.
@@ -411,21 +407,19 @@ def main():
                 kmer_example = [f" {tokenizer.sep_token} ".join(
                     [" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), z)])
                                 for z in zip(*[examples[fn] for fn in features_names])]
-                results = tokenizer(
+                return tokenizer(
                     kmer_example,
-                    padding=padding,
                     # We use this option because DataCollatorForLanguageModeling (see below) is more efficient when it
                     # receives the `special_tokens_mask`.
                     return_special_tokens_mask=True,
                 )
-                results["kmers"] = kmer_example
-                return results
 
             with training_args.main_process_first(desc="dataset map tokenization"):
                 tokenized_datasets = raw_datasets.map(
                     tokenize_function,
                     batched=True,
                     num_proc=data_args.preprocessing_num_workers,
+                    remove_columns=column_names,
                     load_from_cache_file=not data_args.overwrite_cache,
                     desc="Running tokenizer on every pairs in dataset",
                 )
@@ -465,10 +459,12 @@ def main():
             return stats
 
         with training_args.main_process_first(desc="dataset map tokenization"):
+            column_names = tokenized_datasets["train"].column_names
             stats_datasets = tokenized_datasets.map(
                 tokenize_stats,
                 batched=True,
                 num_proc=data_args.preprocessing_num_workers,
+                remove_columns=column_names,
                 load_from_cache_file=not data_args.overwrite_cache,
                 desc="Running tokenizer on every sequence in dataset",
             )
