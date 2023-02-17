@@ -568,11 +568,11 @@ def main():
             labels = labels[mask]
             preds = preds[mask]
             result = metric.compute(predictions=preds, references=labels)
-            try:
-                perplexity = math.exp(result["eval_loss"])
-            except OverflowError:
-                perplexity = float("inf")
-            result["perplexity"] = perplexity
+            # try:
+            #     perplexity = math.exp(result["loss"])
+            # except OverflowError:
+            #     perplexity = float("inf")
+            # result["perplexity"] = perplexity
             return result 
 
     # Data collator
@@ -641,7 +641,7 @@ def main():
                     "per_device_train_batch_size": "train_bs/cpu",
                     "num_train_epochs": "num_epochs",
                 },
-                metric_columns=["eval_accuracy", "eval_perplexity", "epoch", "time_since_restore"],
+                metric_columns=["eval_accuracy", "epoch", "time_since_restore"],
         )
 
         best_run = trainer.hyperparameter_search(
