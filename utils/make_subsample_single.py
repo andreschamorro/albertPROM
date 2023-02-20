@@ -4,6 +4,7 @@ usage:
     $  ./make_subsample_paired.py PRESENCE_PREFIX ABSENCE_PREFIX SAMPLE_DIR N_SAMPLE RATIO VALSIZE 
 """
 import sys, os, random
+import subprocess
 from heapq import nlargest
 from Bio import SeqIO
 from Bio.Seq import Seq
