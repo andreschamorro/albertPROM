@@ -651,11 +651,9 @@ def main():
                 name="tune_transformer_trc",
                 log_to_file=True,
         )
+        print("Best trial id: {}".format(best_run.run_id))
         print("Best trial hyperparameter: {}".format(best_run.hyperparameters))
-        print("Best trial checkpoint: {}".format(best_run.checkpoint))
         print("Best objetive that was obtained for this run: {}".format(best_run.objective))
-        best_run.get_dataframe().to_csv(os.path.join(training_args.output_dir, f"best_run_{task}.csv"))
-        trainer.save_model()  # Saves the tokenizer too for easy upload
 
     kwargs = {"finetuned_from": model_args.model_name_or_path, "tasks": "sst2"}
     if data_args.dataset_name is not None:

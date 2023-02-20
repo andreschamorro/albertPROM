@@ -30,6 +30,12 @@ from dataclasses import dataclass, field
 from itertools import chain
 from typing import Optional, List
 
+os.environ['MASTER_ADDR'] = '127.0.0.1'
+os.environ['MASTER_PORT'] = '29500'
+os.environ['OMP_NUM_THREADS'] = '4'
+os.environ['RANK'] = str(os.environ.get('PMI_RANK', 0))
+os.environ['WORLD_SIZE'] = str(os.environ.get('PMI_SIZE', 1))
+
 import datasets
 from datasets import load_dataset
 import ray
@@ -219,7 +225,7 @@ class DataTrainingArguments:
         metadata={"help": "Whether distinct lines of text in the dataset are to be handled as distinct sequences."},
     )
     pad_to_max_length: bool = field(
-        default=False,
+        default=True,
         metadata={
             "help": (
                 "Whether to pad all samples to `max_seq_length`. "
@@ -637,7 +643,6 @@ def main():
                 parameter_columns={
                     "weight_decay": "w_decay",
                     "learning_rate": "lr",
-                    "hidden_size": "hs",
                     "per_device_train_batch_size": "train_bs/cpu",
                     "num_train_epochs": "num_epochs",
                 },
@@ -658,11 +663,9 @@ def main():
                 name="tune_transformer_mlm",
                 log_to_file=True,
         )
+        print("Best trial id: {}".format(best_run.run_id))
         print("Best trial hyperparameter: {}".format(best_run.hyperparameters))
-        trainer.save_model()  # Saves the tokenizer too for easy upload
-        print("Best trial checkpoint: {}".format(best_run.checkpoint))
-        # print("Best objetive that was obtained for this run: {}".format(best_run.objective))
-        best_run.get_dataframe().to_csv(os.path.join(training_args.output_dir, f"best_run_{task}.csv"))
+        print("Best objetive that was obtained for this run: {}".format(best_run.objective))
 
     kwargs = {"finetuned_from": model_args.model_name_or_path, "tasks": "fill-mask"}
     if data_args.dataset_name is not None:
