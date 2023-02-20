@@ -18,8 +18,13 @@ n_sample = int(sys.argv[4])
 ratio = int(sys.argv[5])
 val_size = int(sys.argv[6])
 
-prid_processing = lambda i: i.split('|')[0] + i.split('-')[-1]
-abid_processing = lambda i: i.split('|')[0] + i.split('-')[-1]
+def _processing(s, label):
+    s.id = s.id.split('|')[0] + s.id.split('-')[-1]
+    s.description = label
+    s.name=""
+    return s
+
+pop_if = lambda l,i: l.pop() != None if (l and l[-1] == i) else False
 
 all_features = []
 all_targets = []
@@ -28,34 +33,28 @@ print("presence processing ...")
 p_features = []
 pr_count = 0
 with open(f"{p_prefix}.fq", "r") as pr_file:
-    for r in SeqIO.parse(pr_file, "fastq"):
-        r.id = prid_processing(r.id)
-        r.description="presence"
-        p_features.append(r)
-        pr_count += 1
+    p_features = [_processing(r, "presence") for r in SeqIO.parse(pr_file, "fastq")]
 
+pr_count = len(p_features)
 print(f"presence count: {pr_count}")
+
 n_sample = n_sample if (n_sample < pr_count and n_sample > 0) else pr_count
 r_index = random.sample(range(pr_count), n_sample)
+
 all_features = [p_features[i] for i in r_index]
 all_targets = [0 for i in r_index]
-n_sample = n_sample * ratio if n_sample > 0 else pr_count * ratio
 print("absence processing ...")
-a_features = []
-ab_count = 0
-with open(f"{a_prefix}.fq", "r") as ar_file:
-    for _ in SeqIO.parse(ar_file, "fastq"):
-        ab_count += 1
+
+n_sample = n_sample * ratio if n_sample > 0 else pr_count * ratio
+ab_count = int(subprocess.check_output(f"echo $(cat {a_prefix}.fq|wc -l)/4|bc", shell=True).split()[0])
 print(f"absence count: {ab_count}")
 
 r_index = random.sample(range(ab_count), n_sample if n_sample < ab_count else ab_count)
+r_index.sort(reverse=True)
+all_targets.extend([1 for i in r_index])
 with open(f"{a_prefix}.fq", "r") as ar_file:
-    for i, r in enumerate(SeqIO.parse(ar_file, "fastq")):
-        if i in r_index:
-            r.id = abid_processing(r.id)
-            r.description="absence"
-            all_features.append(r)
-    all_targets.extend([1 for i in r_index])
+    all_features.extend([_processing(r, "absence") for i, r in enumerate(SeqIO.parse(ar_file, "fastq")) if pop_if(r_index, i)])
+all_targets.extend([1 for i in r_index])
 
 print("All sample processed")
 # suffle data
