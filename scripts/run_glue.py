@@ -23,6 +23,12 @@ import sys
 from dataclasses import dataclass, field
 from typing import Optional, List, Union
 
+os.environ['MASTER_ADDR'] = '127.0.0.1'
+os.environ['MASTER_PORT'] = '29500'
+os.environ['OMP_NUM_THREADS'] = '64'
+os.environ['RANK'] = str(os.environ.get('PMI_RANK', 0))
+os.environ['WORLD_SIZE'] = str(os.environ.get('PMI_SIZE', 1))
+
 import datasets
 import numpy as np
 from sklearn.model_selection import KFold
