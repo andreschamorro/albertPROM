@@ -471,6 +471,7 @@ def main():
         column_names = raw_datasets["train"].column_names
     else:
         column_names = raw_datasets["validation"].column_names
+    if "label" in column_names: column_names.remove("label")
     if data_args.task_name is not None:
         read_1_key, read_2_key = task_to_keys[data_args.task_name]
         label_1_key, label_2_key = task_to_labelkeys[data_args.task_name]
@@ -510,8 +511,8 @@ def main():
         def preprocess_function(examples):
             # Tokenize the reads
             kmer_example = [" ".join(kr) for kr in 
-                            map(lambda r: kmer_split(model_args.model_ksize, r), examples[read_1_key])]
-            # Map labels to ids
+                            map(lambda r: _kmer_split(model_args.model_ksize, r), examples[read_1_key])]
+            kmer_example = [f" {tokenizer.sep_token} ".join([z1, z2]) for z1, z2 in zip(kmer_example, kmer_example)]
             return tokenizer(kmer_example, padding=padding, max_length=max_seq_length, truncation=True)
     else:
         def preprocess_function(examples):
@@ -557,6 +558,7 @@ def main():
             max_predict_samples = min(len(predict_dataset), data_args.max_predict_samples)
             predict_dataset = predict_dataset.select(range(max_predict_samples))
 
+    os.system("clear")
     # Get the metric function
     metric = evaluate.combine(["accuracy", "recall", "precision", "f1"])
 
