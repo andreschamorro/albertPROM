@@ -512,7 +512,7 @@ def main():
             # Tokenize the reads
             kmer_example = [" ".join(kr) for kr in 
                             map(lambda r: _kmer_split(model_args.model_ksize, r), examples[read_1_key])]
-            kmer_example = [f" {tokenizer.sep_token} ".join([z1, z2]) for z1, z2 in zip(kmer_example, kmer_example)]
+            # Map labels to ids
             return tokenizer(kmer_example, padding=padding, max_length=max_seq_length, truncation=True)
     else:
         def preprocess_function(examples):
