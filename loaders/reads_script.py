@@ -187,17 +187,17 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
             fastq_train = os.path.join(data_dir, _FILES['train_single'])
             if not os.path.exists(fastq_train):
                 raise FileNotFoundError(
-                    f"{file} does not exist. Make sure you insert a manual dir that includes the file name {file}. Manual download instructions: {self.manual_download_instructions})"
+                    f"{fastq_train} does not exist. Make sure you insert a manual dir that includes the file name {file}. Manual download instructions: {self.manual_download_instructions})"
                 )
             fastq_valid = os.path.join(data_dir, _FILES['valid_single'])
             if not os.path.exists(fastq_valid):
                 raise FileNotFoundError(
-                    f"{file} does not exist. Make sure you insert a manual dir that includes the file name {file}. Manual download instructions: {self.manual_download_instructions})"
+                    f"{fastq_valid} does not exist. Make sure you insert a manual dir that includes the file name {file}. Manual download instructions: {self.manual_download_instructions})"
                 )
             fastq_test = os.path.join(data_dir, _FILES['tests_single'])
             if not os.path.exists(fastq_test):
                 raise FileNotFoundError(
-                    f"{file} does not exist. Make sure you insert a manual dir that includes the file name {file}. Manual download instructions: {self.manual_download_instructions})"
+                    f"{fastq_test} does not exist. Make sure you insert a manual dir that includes the file name {file}. Manual download instructions: {self.manual_download_instructions})"
                 )
 
         return fastq_train, fastq_valid, fastq_test
