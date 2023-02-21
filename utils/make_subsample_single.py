@@ -60,8 +60,8 @@ print("All sample processed")
 # suffle data
 print("Write sample ...")
 
-train_fold, train_y, test_fold, test_y = train_test_split(all_features, all_targets, random_state=1, shuffle=True, stratify=all_targets)
-test_fold, _, val_fold, _ = train_test_split(test_fold, test_y, test_size=val_size, random_state=1, stratify=test_y)
+train_fold, test_fold, train_y, test_y = train_test_split(all_features, all_targets, random_state=1, shuffle=True, stratify=all_targets)
+test_fold, val_fold, _, _ = train_test_split(test_fold, test_y, test_size=val_size, random_state=1, stratify=test_y)
 # Train sample
 try:
    os.makedirs(d_prefix)
