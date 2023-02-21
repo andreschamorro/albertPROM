@@ -55,7 +55,6 @@ r_index.sort(reverse=True)
 all_targets.extend([1 for i in r_index])
 with open(f"{a_prefix}.fq", "r") as ar_file:
     all_features.extend([_processing(r, "absence") for i, r in enumerate(SeqIO.parse(ar_file, "fastq")) if pop_if(r_index, i)])
-all_targets.extend([1 for i in r_index])
 
 print("All sample processed")
 # suffle data
