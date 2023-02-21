@@ -57,6 +57,9 @@ _FILES = {
         "train_single" : "train_single.fq",
         "valid_single" : "valid_single.fq",
         "tests_single" : "tests_single.fq",
+        "train_revcom" : "train_single.fq",
+        "valid_revcom" : "valid_single.fq",
+        "tests_revcom" : "tests_single.fq",
         "train_paired" : ["train_paired_R1.fq", "train_paired_R2.fq"],
         "valid_paired" : ["valid_paired_R1.fq", "valid_paired_R2.fq"],
         "tests_paired" : ["tests_paired_R1.fq", "tests_paired_R2.fq"],
@@ -139,6 +142,14 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
             label_classes=_LABELS["polyTE"],
             label_column="label",
             num_read=None),
+        ReadsConfig(name="revcom_mono", 
+            version=VERSION, 
+            description="Single-End Reads", 
+            reads_names=["read_1"], 
+            reads_names=["read_2"], 
+            label_classes=_LABELS["monoTE"],
+            label_column="label",
+            num_read=None),
         ReadsConfig(name="paired_mono", 
             version=VERSION, 
             description="Paired-End Reads", 
@@ -203,19 +214,7 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
         return fastq_train, fastq_valid, fastq_test
 
     def _info(self):
-        if self.config.name.startswith("single"):  # This is the name of the configuration selected in BUILDER_CONFIGS above
-            features = datasets.Features(
-                {
-                    "read_1": datasets.Value("string"),
-                    "label": datasets.Value("string"),
-                    # These are the features of your dataset like images, labels ...
-                }
-            )
-            if self.config.label_classes:
-                features["label"] = datasets.features.ClassLabel(names=self.config.label_classes)
-            else:
-                features["label"] = datasets.Value("float32")
-        else:  # This is an example to show how to have different features for "first_domain" and "second_domain"
+        if self.config.name.startswith("paired"):  # This is the name of the configuration selected in BUILDER_CONFIGS above
             features = datasets.Features(
                 {
                     "read_1": datasets.Value("string"),
@@ -231,6 +230,31 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
             else:
                 features["label_1"] = datasets.Value("float32")
                 features["label_2"] = datasets.Value("float32")
+        elif self.config.name.startswith("single"):  # This is an example to show how to have different features for "first_domain" and "second_domain"
+            features = datasets.Features(
+                {
+                    "read_1": datasets.Value("string"),
+                    "label": datasets.Value("string"),
+                    # These are the features of your dataset like images, labels ...
+                }
+            )
+            if self.config.label_classes:
+                features["label"] = datasets.features.ClassLabel(names=self.config.label_classes)
+            else:
+                features["label"] = datasets.Value("float32")
+        else:
+            features = datasets.Features(
+                {
+                    "read_1": datasets.Value("string"),
+                    "read_2": datasets.Value("string"),
+                    "label": datasets.Value("string"),
+                    # These are the features of your dataset like images, labels ...
+                }
+            )
+            if self.config.label_classes:
+                features["label"] = datasets.features.ClassLabel(names=self.config.label_classes)
+            else:
+                features["label"] = datasets.Value("float32")
         return datasets.DatasetInfo(
             # This is the description that will appear on the datasets page.
             description=_READS_DESCRIPTION,
@@ -286,6 +310,14 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
                 for i, r1 in enumerate(SeqIO.parse(r1_file, 'fastq')):
                     yield i, {
                             "read_1": r1.seq,
+                            "label": r1.description.split()[-1], # Read commentary 
+                            }
+        if self.config.name.startswith('revcom'):
+            with open(fastq, 'r') as r1_file:
+                for i, r1 in enumerate(SeqIO.parse(r1_file, 'fastq')):
+                    yield i, {
+                            "read_1": r1.seq,
+                            "read_2": r1.reverse_complement().seq,
                             "label": r1.description.split()[-1], # Read commentary 
                             }
         if self.config.name.startswith('paired'):
