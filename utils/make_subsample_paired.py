@@ -18,8 +18,13 @@ n_sample = int(sys.argv[4])
 ratio = int(sys.argv[5])
 val_size = int(sys.argv[6])
 
-prid_processing = lambda i: i.split('|')[0] + i.split('-')[-1]
-abid_processing = lambda i: i.split('|')[0] + i.split('-')[-1]
+def _processing(s, label):
+    s.id = s.id.split('|')[0] + s.id.split('-')[-1]
+    s.description = label
+    s.name=""
+    return s
+
+pop_if = lambda l,i: l.pop() != None if (l and l[-1] == i) else False
 
 all_features = []
 # Presence sample
@@ -27,43 +32,39 @@ print("presence processing ...")
 p_features = []
 pr_count = 0
 with open(f"{p_prefix}1.fq", "r") as pr1_file, open(f"{p_prefix}1.fq", "r") as pr2_file:
-    for r1, r2 in zip(SeqIO.parse(pr1_file, "fastq"), SeqIO.parse(pr2_file, "fastq")):
-        r1.id = prid_processing(r1.id)
-        r1.description="presence"
-        r2.id = prid_processing(r2.id)
-        r2.description="presence"
-        p_features.append([r1, r2])
-        pr_count += 1
+    p_features = [(_processing(r1, "presence"), _processing(r2, "presence")) 
+                  for r1, r2 in zip(SeqIO.parse(pr1_file, "fastq"), SeqIO.parse(pr2_file, "fastq"))]
 
+pr_count = len(p_features)
 print(f"presence count: {pr_count}")
+
 n_sample = n_sample if (n_sample < pr_count and n_sample > 0) else pr_count
 r_index = random.sample(range(pr_count), n_sample)
+
 all_features = [p_features[i] for i in r_index]
-n_sample = n_sample * ratio if n_sample > 0 else pr_count * ratio
+all_targets = [0 for i in r_index]
+
 print("absence processing ...")
-a_features = []
-ab_count = 0
-with open(f"{a_prefix}1.fq", "r") as ar1_file:
-    for r1 in SeqIO.parse(ar1_file, "fastq"):
-        ab_count += 1
+
+n_sample = n_sample * ratio if n_sample > 0 else pr_count * ratio
+ab_count = int(subprocess.check_output(f"echo $(cat {a_prefix}1.fq|wc -l)/4|bc", shell=True).split()[0])
 print(f"absence count: {ab_count}")
 
 r_index = random.sample(range(ab_count), n_sample if n_sample < ab_count else ab_count)
+r_index.sort(reverse=True)
+all_targets.extend([1 for i in r_index])
+
 with open(f"{a_prefix}1.fq", "r") as ar1_file, open(f"{a_prefix}2.fq", "r") as ar2_file:
-    for i, (r1, r2) in enumerate(zip(SeqIO.parse(ar1_file, "fastq"), SeqIO.parse(ar2_file, "fastq"))):
-        if i in r_index:
-            r1.id = abid_processing(r1.id)
-            r1.description="absence"
-            r2.id = abid_processing(r2.id)
-            r2.description="absence"
-            all_features.append([r1, r2])
+    all_features.extend([(_processing(r1, "absence"), _processing(r1, "absence")) 
+                         for i, (r1, r2) in enumerate(zip(SeqIO.parse(ar1_file, "fastq"), SeqIO.parse(ar2_file, "fastq"))) 
+                            if pop_if(r_index, i)])
 
 print("All sample processed")
 # suffle data
 print("Write sample ...")
 
-train_fold, test_fold = train_test_split(all_features, random_state=1, shuffle=True)
-test_fold, val_fold = train_test_split(test_fold, test_size=val_size, random_state=1)
+train_fold, test_fold, train_y, test_y = train_test_split(all_features, all_targets, random_state=1, shuffle=True, stratify=all_targets)
+test_fold, val_fold, _, _ = train_test_split(test_fold, test_y, test_size=val_size, random_state=1, stratify=test_y)
 # Train sample
 try:
    os.makedirs(d_prefix)
