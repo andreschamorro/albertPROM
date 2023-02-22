@@ -29,6 +29,12 @@ from itertools import chain
 from typing import Optional, List, Union
 import numpy as np
 
+os.environ['MASTER_ADDR'] = '127.0.0.1'
+os.environ['MASTER_PORT'] = '29500'
+os.environ['OMP_NUM_THREADS'] = '4'
+os.environ['RANK'] = str(os.environ.get('PMI_RANK', 0))
+os.environ['WORLD_SIZE'] = str(os.environ.get('PMI_SIZE', 1))
+
 import datasets
 from datasets import load_dataset
 import ray
@@ -464,6 +470,7 @@ def main():
     else:
         column_names = raw_datasets["validation"].column_names
 
+    if "label" in column_names: column_names.remove("label")
     if data_args.task_name is not None:
         read_1_key, read_2_key = task_to_keys[data_args.task_name]
         label_1_key, label_2_key = task_to_labelkeys[data_args.task_name]
