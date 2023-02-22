@@ -423,6 +423,8 @@ def main():
     if data_args.task_name is not None:
         if data_args.task_name == "trc1":
             label_list = raw_datasets["train"].features["label"].names
+        elif data_args.dataset_config_name.startswith('revcom'):
+            label_list = raw_datasets["train"].features["label"].names
         else:
             label_list = raw_datasets["train"].features["label_1"].names
         num_labels = len(label_list)

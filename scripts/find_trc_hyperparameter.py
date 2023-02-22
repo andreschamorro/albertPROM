@@ -401,6 +401,8 @@ def main():
     if data_args.task_name is not None:
         if data_args.task_name == "trc1":
             label_list = raw_datasets["train"].features["label"].names
+        elif data_args.dataset_config_name.startswith('revcom'):
+            label_list = raw_datasets["train"].features["label"].names
         else:
             label_list = raw_datasets["train"].features["label_1"].names
         num_labels = len(label_list)
@@ -511,6 +513,14 @@ def main():
                             map(lambda r: kmer_split(model_args.model_ksize, r), examples[read_1_key])]
             result = tokenizer(kmer_example, padding=padding, max_length=max_seq_length, truncation=True)
             # Map labels to ids
+            return result
+    elif data_args.dataset_config_name.startswith('revcom'):
+        def preprocess_function(examples):
+            # Tokenize the reads
+            kmer_example = [f" {tokenizer.sep_token} ".join(
+                [" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), z)]) 
+                            for z in zip(examples[read_1_key],  examples[read_2_key])]
+            result = tokenizer(kmer_example, padding=padding, max_length=max_seq_length, truncation=True)
             return result
     else:
         def preprocess_function(examples):
