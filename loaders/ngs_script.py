@@ -55,8 +55,8 @@ _URLS = {
 
 _FILES = {
     "transcript": "gencode.v41.transcripts.fa.gz", 
-    "transcript_single": "transcripts.fq",
-    "transcript_ext": ["transcripts_R1.fq", "transcripts_R2.fq"],
+    "single_transcript": "transcripts.fq",
+    "paired_transcript": ["transcripts_R1.fq", "transcripts_R2.fq"],
     "whole_genome": "hg38.fa.gz"
 }
 
@@ -136,12 +136,12 @@ class NGSDataset(datasets.GeneratorBasedBuilder):
             dist=500,
             is_hap=False,
             num_read=None),
-        NGSConfig(name="transcript_ext", 
+        NGSConfig(name="paired_transcript", 
             version=VERSION, 
             description="External simulator for reads", 
             reads_names=["read_1", "read_2"], 
             num_read=None),
-        NGSConfig(name="transcript_single", 
+        NGSConfig(name="single_transcript", 
             version=VERSION, 
             description="External simulator for reads", 
             reads_names="read_1", 
@@ -157,14 +157,14 @@ class NGSDataset(datasets.GeneratorBasedBuilder):
         # By default the archives will be extracted and a path to a cached folder where they are extracted is returned instead of the archive
 
         data_dir = os.path.abspath(os.path.expanduser(dl_manager.manual_dir))
-        if self.config.name.endswith('_ext'):
+        if self.config.name.startswith('paired'):
             ref_file = [os.path.join(data_dir, file) for file in _FILES[self.config.name]]
             for file in ref_file:
                 if not os.path.exists(file):
                     raise FileNotFoundError(
                         f"{file} does not exist. Make sure you insert a manual dir that includes the file name {f}. Manual download instructions: {self.manual_download_instructions})"
                     )
-        elif self.config.name.endswith('_single'):
+        elif self.config.name.startswith('single'):
             ref_file = os.path.join(data_dir, _FILES[self.config.name])
             if not os.path.exists(ref_file):
                 raise FileNotFoundError(
@@ -240,7 +240,7 @@ class NGSDataset(datasets.GeneratorBasedBuilder):
     def _generate_examples(self, reference, split):
         # TODO: This method handles input defined in _split_generators to yield (key, example) tuples from the dataset.
         # The `key` is for legacy reasons (tfds) and is not important in itself, but must be unique for each example.
-        if self.config.name.endswith('_ext'):
+        if self.config.name.startswith('paired'):
             with open(reference[0], 'r') as r1_file, open(reference[1], 'r') as r2_file:
                 for i, (r1, r2) in enumerate(zip(SeqIO.parse(r1_file, 'fastq'), SeqIO.parse(r2_file, 'fastq'))):
                     yield i, {
@@ -248,7 +248,7 @@ class NGSDataset(datasets.GeneratorBasedBuilder):
                             "read_2": r2.seq,
                             "transcript_src": r1.id.split('-')[0], # ART style read sep
                             }
-        if self.config.name.endswith('_single'):
+        if self.config.name.startswith('single'):
             with open(reference, 'r') as r_file:
                 for i, r in enumerate(SeqIO.parse(r_file, 'fastq')):
                     yield i, {
