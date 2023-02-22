@@ -67,7 +67,7 @@ require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/lang
 logger = logging.getLogger(__name__)
 MODEL_CONFIG_CLASSES = list(MODEL_FOR_MASKED_LM_MAPPING.keys())
 MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
-DATASET_TYPES = {"ngs": "loaders/ngs_script.py", "wtr": "loaders/trns_script.py"}
+DATASET_TYPES = {"rds": "loaders/reads_script.py", "ngs": "loaders/ngs_script.py", "wtr": "loaders/trns_script.py"}
 SPECIAL_DATASET_CONFIG = {
         "ngs": {'num_read': 0, 'x_fold': 5, 'len_r': 150, 'len_l': 150, 'std_dev': 50, 'dist': 500}}
 
@@ -424,7 +424,8 @@ def main():
         column_names = raw_datasets["train"].column_names
     else:
         column_names = raw_datasets["validation"].column_names
-    if data_args.dataset_name == "ngs":
+    if "label" in column_names: column_names.remove("label")
+    if data_args.dataset_name == "ngs" or data_args.dataset_name == "rds" :
         features_names = [col for col in column_names if col.startswith('read')]
     else:
         features_names = ["sequence"] if "sequence" in column_names else [column_names[0]]
@@ -445,10 +446,10 @@ def main():
             )
         max_seq_length = min(data_args.max_seq_length, tokenizer.model_max_length)
     kmer_split = partial(_kmer_split_mlm, mask_token=tokenizer.mask_token, mlm_probability=data_args.mlm_probability) if data_args.pre_mlm else partial(_kmer_split)
-    if data_args.dataset_name == "ngs":
+    if data_args.dataset_name == "ngs" or data_args.dataset_name == "read" :
         # TODO group for reads > max_length
         padding = "max_length" if data_args.pad_to_max_length else False
-        if data_args.dataset_config_name.endswith('_single'):
+        if data_args.dataset_config_name.startswith('single'):
 
             def tokenize_function(examples):
                 kmer_example = [" ".join(kr) for kr in map(lambda r: kmer_split(model_args.model_ksize, r), examples['read_1'])]
@@ -471,7 +472,7 @@ def main():
                     load_from_cache_file=not data_args.overwrite_cache,
                     desc="Running tokenizer on dataset single read",
                 )
-        else:
+        else: # Paired
             # Otherwise, we tokenize every text, then concatenate them together before splitting them in smaller parts.
             # We use `return_special_tokens_mask=True` because DataCollatorForLanguageModeling (see below) is more
             # efficient when it receives the `special_tokens_mask`.

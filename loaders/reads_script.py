@@ -57,9 +57,6 @@ _FILES = {
         "train_single" : "train_single.fq",
         "valid_single" : "valid_single.fq",
         "tests_single" : "tests_single.fq",
-        "train_revcom" : "train_single.fq",
-        "valid_revcom" : "valid_single.fq",
-        "tests_revcom" : "tests_single.fq",
         "train_paired" : ["train_paired_R1.fq", "train_paired_R2.fq"],
         "valid_paired" : ["valid_paired_R1.fq", "valid_paired_R2.fq"],
         "tests_paired" : ["tests_paired_R1.fq", "tests_paired_R2.fq"],
@@ -163,6 +160,13 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
             label_classes=_LABELS["polyTE"],
             label_column=["label_1", "label_2"],
             num_read=None),
+        ReadsConfig(name="multi_mono", 
+            version=VERSION, 
+            description="Paired-End Reads", 
+            reads_names=["read_1", "read_2"], 
+            label_classes=_LABELS["monoTE"],
+            label_column=["label_1", "label_2"],
+            num_read=None),
     ]
 
     def _preprocessing(self, dl_manager):
@@ -193,6 +197,43 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
                     raise FileNotFoundError(
                         f"{file} does not exist. Make sure you insert a manual dir that includes the file name {file}. Manual download instructions: {self.manual_download_instructions})"
                     )
+        elif self.config.name.startswith('multi'):
+            fastq_train = {}
+            fastq_train['paired'] = [os.path.join(data_dir, file) for file in _FILES['train_paired']]
+            fastq_train['single'] = os.path.join(data_dir, _FILES['train_single'])
+            for file in fastq_train['paired']:
+                if not os.path.exists(file):
+                    raise FileNotFoundError(
+                        f"{fastq_train['paired']} does not exist. Make sure you insert a manual dir that includes the file name {fastq_train['paired']}. Manual download instructions: {self.manual_download_instructions})"
+                    )
+            if not os.path.exists(fastq_train['single']):
+                raise FileNotFoundError(
+                    f"{fastq_train['single']} does not exist. Make sure you insert a manual dir that includes the file name {fastq_train['single']}. Manual download instructions: {self.manual_download_instructions})"
+                )
+            fastq_valid = {}
+            fastq_valid['paired'] = [os.path.join(data_dir, file) for file in _FILES['valid_paired']]
+            fastq_valid['single'] = os.path.join(data_dir, _FILES['valid_single'])
+            for file in fastq_valid['paired']:
+                if not os.path.exists(file):
+                    raise FileNotFoundError(
+                        f"{fastq_valid['paired']} does not exist. Make sure you insert a manual dir that includes the file name {fastq_valid['paired']}. Manual download instructions: {self.manual_download_instructions})"
+                    )
+            if not os.path.exists(fastq_valid['single']):
+                raise FileNotFoundError(
+                    f"{fastq_valid['single']} does not exist. Make sure you insert a manual dir that includes the file name {fastq_valid['single']}. Manual download instructions: {self.manual_download_instructions})"
+                )
+            fastq_test = {}
+            fastq_test['paired'] = [os.path.join(data_dir, file) for file in _FILES['tests_paired']]
+            fastq_test['single'] = os.path.join(data_dir, _FILES['tests_single'])
+            for file in fastq_test['paired']:
+                if not os.path.exists(file):
+                    raise FileNotFoundError(
+                        f"{fastq_test['paired']} does not exist. Make sure you insert a manual dir that includes the file name {fastq_test['paired']}. Manual download instructions: {self.manual_download_instructions})"
+                    )
+            if not os.path.exists(fastq_test['single']):
+                raise FileNotFoundError(
+                    f"{fastq_test['single']} does not exist. Make sure you insert a manual dir that includes the file name {fastq_test['single']}. Manual download instructions: {self.manual_download_instructions})"
+                )
         else:
             fastq_train = os.path.join(data_dir, _FILES['train_single'])
             if not os.path.exists(fastq_train):
@@ -229,6 +270,19 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
             else:
                 features["label_1"] = datasets.Value("float32")
                 features["label_2"] = datasets.Value("float32")
+        if self.config.name.startswith("multi"):  # This is the name of the configuration selected in BUILDER_CONFIGS above
+            features = datasets.Features(
+                {
+                    "read_1": datasets.Value("string"),
+                    "read_2": datasets.Value("string"),
+                    "label": datasets.Value("string"),
+                    # These are the features of your dataset like images, labels ...
+                }
+            )
+            if self.config.label_classes:
+                features["label"] = datasets.features.ClassLabel(names=self.config.label_classes)
+            else:
+                features["label"] = datasets.Value("float32")
         elif self.config.name.startswith("single"):  # This is an example to show how to have different features for "first_domain" and "second_domain"
             features = datasets.Features(
                 {
@@ -327,4 +381,19 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
                             "read_2": r2.seq,
                             "label_1": r1.description.split()[-1], # Read commentary 
                             "label_2": r2.description.split()[-1], # Read commentary 
+                            }
+        if self.config.name.startswith('multi'):
+            with open(fastq['paired'][0], 'r') as r1_file, open(fastq['paired'][1], 'r') as r2_file:
+                for i, (r1, r2) in enumerate(zip(SeqIO.parse(r1_file, 'fastq'), SeqIO.parse(r2_file, 'fastq'))):
+                    yield i, {
+                            "read_1": r1.seq,
+                            "read_2": r2.seq,
+                            "label": r1.description.split()[-1], # Read commentary 
+                            }
+            with open(fastq['single'], 'r') as r1_file:
+                for i, r1 in enumerate(SeqIO.parse(r1_file, 'fastq')):
+                    yield i, {
+                            "read_1": r1.seq,
+                            "read_2": "",
+                            "label": r1.description.split()[-1], # Read commentary 
                             }
