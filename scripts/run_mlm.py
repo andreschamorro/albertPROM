@@ -424,7 +424,6 @@ def main():
         column_names = raw_datasets["train"].column_names
     else:
         column_names = raw_datasets["validation"].column_names
-    if "label" in column_names: column_names.remove("label")
     if data_args.dataset_name == "ngs" or data_args.dataset_name == "rds" :
         features_names = [col for col in column_names if col.startswith('read')]
     else:
@@ -446,7 +445,7 @@ def main():
             )
         max_seq_length = min(data_args.max_seq_length, tokenizer.model_max_length)
     kmer_split = partial(_kmer_split_mlm, mask_token=tokenizer.mask_token, mlm_probability=data_args.mlm_probability) if data_args.pre_mlm else partial(_kmer_split)
-    if data_args.dataset_name == "ngs" or data_args.dataset_name == "read" :
+    if data_args.dataset_name == "ngs" or data_args.dataset_name == "rds" :
         # TODO group for reads > max_length
         padding = "max_length" if data_args.pad_to_max_length else False
         if data_args.dataset_config_name.startswith('single'):
@@ -548,6 +547,8 @@ def main():
                 load_from_cache_file=not data_args.overwrite_cache,
                 desc=f"Grouping texts in chunks of {max_seq_length}",
             )
+
+    os.system("clear")
 
     if training_args.do_train:
         if "train" not in tokenized_datasets:

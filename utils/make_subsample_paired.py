@@ -4,6 +4,7 @@ usage:
     $  ./make_subsample_paired.py PRESENCE_PREFIX ABSENCE_PREFIX SAMPLE_DIR N_SAMPLE RATIO VALSIZE 
 """
 import sys, os, random
+import subprocess
 from heapq import nlargest
 from Bio import SeqIO
 from Bio.Seq import Seq
@@ -31,7 +32,7 @@ all_features = []
 print("presence processing ...")
 p_features = []
 pr_count = 0
-with open(f"{p_prefix}1.fq", "r") as pr1_file, open(f"{p_prefix}1.fq", "r") as pr2_file:
+with open(f"{p_prefix}1.fq", "r") as pr1_file, open(f"{p_prefix}2.fq", "r") as pr2_file:
     p_features = [(_processing(r1, "presence"), _processing(r2, "presence")) 
                   for r1, r2 in zip(SeqIO.parse(pr1_file, "fastq"), SeqIO.parse(pr2_file, "fastq"))]
 

@@ -7,14 +7,18 @@ import datasets
 from tokenizers import normalizers, pre_tokenizers, processors, SentencePieceUnigramTokenizer, Regex 
 from transformers import PreTrainedTokenizerFast
 
-DATASET_TYPES = {"ngs": "loaders/ngs_script.py", "wtr": "loaders/trns_script.py"}
+DATASET_TYPES = {"rds": "loaders/reads_script.py", "ngs": "loaders/ngs_script.py", "wtr": "loaders/trns_script.py"}
+
+def create_lambda_with_globals(s):
+    return eval(s, globals())
 
 def _kmer_split(k: int, sequence: str) -> List[str]:
     return " ".join([sequence[j: j + k] for j in range(len(sequence) - k + 1)])
 
-def get_training_corpus(trans_data, batch_size, k):
-    for i in range(0, len(trans_data["train"]), batch_size):
-        yield [_kmer_split(k, seq) for seq in trans_data["train"][i : i + batch_size]["sequence"]]
+def get_training_corpus(raw_datasets, features_names, batch_size, k):
+    for i in range(0, len(raw_datasets["train"]), batch_size):
+        for feature in features_names:
+            yield [_kmer_split(k, seq) for seq in raw_datasets["train"][i : i + batch_size][feature]]
 
 def main():
     parser = argparse.ArgumentParser()
@@ -28,13 +32,16 @@ def main():
         "--name", default="sequencepiece_unigram", type=str, help="The name of the output vocab files"
     )
     parser.add_argument(
-        "--dataset", default="wtr", type=str, help="The name of the input dataset"
+        "--dataset_name", default="wtr", type=str, help="The name of the input dataset"
     )
     parser.add_argument(
         "--dataset_config_name", default="transcript", type=str, help="The name of the input dataset"
     )
     parser.add_argument(
         "--dataset_dir", default="run/data", type=str, help="The name of the input dataset"
+    )
+    parser.add_argument(
+        "--dataset_filter", default="lambda e: e", type=create_lambda_with_globals, help="A lambda filter of the input dataset"
     )
     parser.add_argument(
         "--vocab_size", default=10000, type=int, help="vocab size"
@@ -48,8 +55,15 @@ def main():
     parser.add_argument('--fast', action='store_true')
     args = parser.parse_args()
     
-    trans_data = datasets.load_dataset(DATASET_TYPES[args.dataset], args.dataset_config_name, data_dir=args.dataset_dir)
-    trans_data = trans_data.shuffle(seed=42)
+    raw_datasets = datasets.load_dataset(DATASET_TYPES[args.dataset_name], args.dataset_config_name, data_dir=args.dataset_dir)
+    raw_datasets = raw_datasets.shuffle(seed=42)
+    raw_datasets = raw_datasets.filter(args.dataset_filter)
+
+    column_names = raw_datasets["train"].column_names
+    if args.dataset_name == "ngs" or args.dataset_name == "rds" :
+        features_names = [col for col in column_names if col.startswith('read')]
+    else:
+        features_names = ["sequence"] if "sequence" in column_names else [column_names[0]]
 
     # Initialize an empty tokenizer
     tokenizer = SentencePieceUnigramTokenizer()
@@ -64,7 +78,7 @@ def main():
 
     # And then train
     tokenizer.train_from_iterator(
-        get_training_corpus(trans_data, args.batch_size, args.k),
+        get_training_corpus(raw_datasets, features_names, args.batch_size, args.k),
         vocab_size=args.vocab_size,
         show_progress=True,
         special_tokens=["[CLS]", "<pad>", "[SEP]", "<unk>", "[MASK]",],
