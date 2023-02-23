@@ -270,7 +270,7 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
             else:
                 features["label_1"] = datasets.Value("float32")
                 features["label_2"] = datasets.Value("float32")
-        if self.config.name.startswith("multi"):  # This is the name of the configuration selected in BUILDER_CONFIGS above
+        elif self.config.name.startswith("multi"):  # This is the name of the configuration selected in BUILDER_CONFIGS above
             features = datasets.Features(
                 {
                     "read_1": datasets.Value("string"),
