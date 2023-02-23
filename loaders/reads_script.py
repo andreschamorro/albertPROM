@@ -383,16 +383,15 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
                             "label_2": r2.description.split()[-1], # Read commentary 
                             }
         if self.config.name.startswith('multi'):
-            with open(fastq['paired'][0], 'r') as r1_file, open(fastq['paired'][1], 'r') as r2_file:
+            with open(fastq['paired'][0], 'r') as r1_file, open(fastq['paired'][1], 'r') as r2_file, open(fastq['single'], 'r') as r_file:
                 for i, (r1, r2) in enumerate(zip(SeqIO.parse(r1_file, 'fastq'), SeqIO.parse(r2_file, 'fastq'))):
                     yield i, {
                             "read_1": r1.seq,
                             "read_2": r2.seq,
                             "label": r1.description.split()[-1], # Read commentary 
                             }
-            with open(fastq['single'], 'r') as r1_file:
                 for i, r1 in enumerate(SeqIO.parse(r1_file, 'fastq')):
-                    yield i, {
+                    yield i+j+1, {
                             "read_1": r1.seq,
                             "read_2": "",
                             "label": r1.description.split()[-1], # Read commentary 
