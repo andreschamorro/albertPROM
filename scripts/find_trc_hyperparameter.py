@@ -532,8 +532,8 @@ def main():
     else:
         def preprocess_function(examples):
             # Tokenize the reads
-            kmer_example = [f" {tokenizer.sep_token} ".join(
-                [" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), z)]) 
+            kmer_example = [
+                [" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), z)] 
                             for z in zip(examples[read_1_key],  examples[read_2_key])]
             #args = (
             #        (batch_split(model_args.model_ksize, examples[read_1_key]),) if read_2_key is None else (batch_split(model_args.model_ksize, examples[read_1_key]), batch_split(model_args.model_ksize, examples[read_2_key]))
