@@ -471,13 +471,13 @@ def main():
                     load_from_cache_file=not data_args.overwrite_cache,
                     desc="Running tokenizer on dataset single read",
                 )
-        else: # Paired
+        else: # Paired or single at same time
             # Otherwise, we tokenize every text, then concatenate them together before splitting them in smaller parts.
             # We use `return_special_tokens_mask=True` because DataCollatorForLanguageModeling (see below) is more
             # efficient when it receives the `special_tokens_mask`.
             def tokenize_function(examples):
-                kmer_example = [
-                    [" ".join(kr) for kr in map(lambda r: kmer_split(model_args.model_ksize, r), z)]
+                kmer_example = [" ".join(
+                    [" ".join(kr) for kr in map(lambda r: kmer_split(model_args.model_ksize, r), z)])
                                 for z in zip(*[examples[fn] for fn in features_names])]
                 return tokenizer(
                     kmer_example,

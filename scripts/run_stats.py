@@ -369,8 +369,7 @@ def main():
 
     # Preprocessing the datasets.
     # First we tokenize all the texts.
-    if training_args.do_train:
-        column_names = raw_datasets["train"].column_names
+    column_names = raw_datasets["train"].column_names
     if data_args.dataset_name == "ngs":
         features_names = [col for col in column_names if col.startswith('read')]
     else:
@@ -442,7 +441,7 @@ def main():
 
     # Log a few random samples from the training set:
     for index in random.sample(range(len(tokenized_datasets)), min(3, len(tokenized_datasets))):
-        logger.info(f"Sample {index} of the training set: {raw_datasets['train'][index]['read_1']}.")
+        logger.info(f"Sample {index} of the training set: {raw_datasets['train'][index][features_names[0]]}.")
         logger.info(f"Sample {index} of the training set: {tokenized_datasets['train'][index]}.")
 
     # Tokenizer stats
