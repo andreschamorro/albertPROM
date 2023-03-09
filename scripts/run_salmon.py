@@ -10,9 +10,15 @@ from typing import Optional, List
 import pandas as pd
 from Bio import SeqIO
 from itertools import repeat
-from transformers import pipeline
 
-pipe = pipeline("sentiment-analysis", "deploy/models/transcript", framework="pt", num_workers=16)
+from transformers import (
+    pipeline,
+    TextClassificationPipeline, 
+    AutoConfig,
+    AutoModelForSequenceClassification,
+    AutoTokenizer
+)
+
 
 def _salmon(**kwargs):
     import snakemake
@@ -51,7 +57,7 @@ def kmer_generator_single(request, k=15, sep_token=""):
         yield f" ".join(
                 [_kmer_split(k, str(r1.seq)), r2])
 
-def predict(request):
+def predict(request, pipe):
     try:
        os.makedirs(request.out)
     except FileExistsError:
@@ -124,7 +130,27 @@ def main():
     )
     args = parser.parse_args()
 
-    predict(args)
+pipe = pipeline("sentiment-analysis", "deploy/models/transcript", framework="pt", num_workers=16)
+    config = AutoConfig.from_pretrained(
+        "deploy/models/transcript",
+        num_labels=2,
+        finetuning_task="trc2",
+        use_auth_token=None,
+    )
+    tokenizer = AutoTokenizer.from_pretrained(
+        "deploy/models/transcript",
+        use_fast=True,
+        model_max_length=512,
+        truncation_side='right'
+        use_auth_token=None,
+    )
+    model = AutoModelForSequenceClassification.from_pretrained(
+        "deploy/models/transcript",
+        config=config,
+        use_auth_token=None,
+    )
+    pipe = TextClassificationPipeline(model=model, tokenizer=tokenizer, batch_size=32)
+    predict(args, pipe)
     
 if __name__ == "__main__":
     main()
