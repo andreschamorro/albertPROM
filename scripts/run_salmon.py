@@ -1,9 +1,6 @@
 import os
 import argparse
-<<<<<<< HEAD
-=======
 import tempfile
->>>>>>> dev
 import snakemake
 import subprocess
 import requests
@@ -52,7 +49,7 @@ def kmer_generator_single(request, k=15, sep_token=""):
     # Tokenize the reads
     for r1, r2 in zip(_read(request.reads_1, request.fformat), repeat("")):
         yield f" ".join(
-                [_kmer_split(k, str(r1.seq)), repeat("")])
+                [_kmer_split(k, str(r1.seq)), r2])
 
 def predict(request):
     try:
@@ -68,7 +65,7 @@ def predict(request):
     salmon_kargs = {
         "input_path": request.out,
         "outpath": os.path.join(request.out, "salmon_out"),
-        "index": "resource/IntactL1ElementsFLI-L1Ens84.38",
+        "index": "deploy/resource/IntactL1ElementsFLI-L1Ens84.38",
         "num_threads": 16,
         "exprtype": "TPM"
     }
@@ -81,10 +78,11 @@ def predict(request):
             pre_ids.write('\n'.join(line1_ids))
         seq_grep = subprocess.Popen(['seqkit', 
                                      'grep', '-f', os.path.join(request.out, "presence_ids.list"),
-                                     '-', '-o', os.path.join(request.out, "presence_R1.fa")], 
+                                     request.reads_1, '-o', os.path.join(request.out, "presence_R1.fa")], 
                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-        _ = seq_grep.communicate(input=request.reads_1.encode())
+        _ = seq_grep.communicate()
         salmon_kargs["paired"] = False
+        _salmon(salmon_kargs)
         # Write Temp line-1 reads
     else:
         inference = pipe(kmer_generator_single(request))
@@ -96,15 +94,16 @@ def predict(request):
             pre_ids.write('\n'.join(line1_ids))
         seq_grep_r1 = subprocess.Popen(['seqkit', 
                                      'grep', '-f', os.path.join(request.out, "presence_ids.list"),
-                                     '-', '-o', os.path.join(request.out, "presence_R1.fa")], 
+                                     request.reads_1, '-o', os.path.join(request.out, "presence_R1.fa")], 
                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         seq_grep_r2 = subprocess.Popen(['seqkit', 
                                      'grep', '-f', os.path.join(request.out, "presence_ids.list"),
-                                     '-', '-o', os.path.join(request.out, "presence_R2.fa")], 
+                                     request.reads_2, '-o', os.path.join(request.out, "presence_R2.fa")], 
                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-        _ = seq_grep_r1.communicate(input=request.reads_1.encode())
-        _ = seq_grep_r2.communicate(input=request.reads_2.encode())
+        _ = seq_grep_r1.communicate()
+        _ = seq_grep_r2.communicate()
         salmon_kargs["paired"] = True 
+        _salmon(salmon_kargs)
 
 def main():
     parser = argparse.ArgumentParser()
