@@ -390,9 +390,9 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
                             "read_2": r2.seq,
                             "label": r1.description.split()[-1], # Read commentary 
                             }
-                for i, r1 in enumerate(SeqIO.parse(r1_file, 'fastq')):
+                for i, r in enumerate(SeqIO.parse(r_file, 'fastq')):
                     yield i+j+1, {
                             "read_1": r1.seq,
                             "read_2": "",
-                            "label": r1.description.split()[-1], # Read commentary 
+                            "label": r.description.split()[-1], # Read commentary 
                             }

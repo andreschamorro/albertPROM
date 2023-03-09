@@ -22,6 +22,7 @@ import random
 import sys
 from dataclasses import dataclass, field
 from typing import Optional, List, Union
+from itertools import repeat
 
 os.environ['MASTER_ADDR'] = '127.0.0.1'
 os.environ['MASTER_PORT'] = '29500'
@@ -423,7 +424,7 @@ def main():
     if data_args.task_name is not None:
         if data_args.task_name == "trc1":
             label_list = raw_datasets["train"].features["label"].names
-        elif data_args.dataset_config_name.startswith('revcom'):
+        elif not data_args.dataset_config_name.startswith('paired'):
             label_list = raw_datasets["train"].features["label"].names
         else:
             label_list = raw_datasets["train"].features["label_1"].names
@@ -512,11 +513,12 @@ def main():
     if data_args.dataset_config_name.startswith('single'):
         def preprocess_function(examples):
             # Tokenize the reads
-            kmer_example = [" ".join(kr) for kr in 
-                            map(lambda r: _kmer_split(model_args.model_ksize, r), examples[read_1_key])]
-            # Map labels to ids
-            return tokenizer(kmer_example, padding=padding, max_length=max_seq_length, truncation=True)
-    elif data_args.dataset_config_name.startswith('revcom'):
+            kmer_example = [" ".join(
+                [" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), z)]) 
+                            for z in zip(examples[read_1_key],  repeat(""))]
+            result = tokenizer(kmer_example, padding=padding, max_length=max_seq_length, truncation=True)
+            return result
+    elif data_args.dataset_config_name.startswith('multi'):
         def preprocess_function(examples):
             # Tokenize the reads
             kmer_example = [" ".join(

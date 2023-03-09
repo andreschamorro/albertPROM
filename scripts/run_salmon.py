@@ -1,4 +1,6 @@
 import os
+import argparse
+import snakemake
 import subprocess
 import requests
 import json
@@ -7,30 +9,28 @@ from typing import Optional, List
 import pandas as pd
 from Bio import SeqIO
 from itertools import repeat
-
-from fastapi import FastAPI, Response
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, StreamingResponse
-
-from pydantic import BaseModel
-from torch.utils.data import Dataset
 from transformers import pipeline
 
-app = FastAPI(docs_url=None, redoc_url=None)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+def _salmon(**kwargs):
+    import snakemake
+    snakefile = os.path.join(os.path.dirname(__file__), "snakemake/snakefile.paired" if kwargs["paired"] else "snakemake/snakefile.single")
 
-@app.head("/")
-@app.get("/")
-def index() -> FileResponse:
-    return FileResponse(path="static/index.html", media_type="text/html")
+    snakemake.snakemake(
+        snakefile=snakefile,
+        config={
+            "input_path": kwargs["inpath"],
+            "output_path": kwargs["--outpath"],
+            "index": kwargs["--reference"],
+            "salmon": os.path.join(os.path.expanduser('~'),".local/bin/salmon"),
+            "num_threads" : kwargs["--num_threads"],
+            "exprtype": kwargs["--exprtype"],
+        },
+        quiet=True,
+        lock=False
+    )
 
-pipe = pipeline("sentiment-analysis", "models/transcript", framework="pt", num_workers=16)
-
-def _kmer_split(k: int, sequence: str) -> List[str]:
-    return " ".join([sequence[j: j + k] for j in range(len(sequence) - k + 1)])
-
-def _read(fa, fformat):
-    for feature in SeqIO.parse(StringIO(fa), fformat):
+def _read(ffile, fformat):
+    for feature in SeqIO.parse(ffile, fformat):
         yield feature 
 
 def kmer_generator_pair(request, k=15, sep_token=""):
@@ -45,13 +45,7 @@ def kmer_generator_single(request, k=15, sep_token=""):
         yield f" ".join(
                 [_kmer_split(k, str(r1.seq)), repeat("")])
 
-class SequenceRequest(BaseModel):
-    fformat: str
-    reads_1: str
-    reads_2: str
-
-@app.post("/transcript", response_class = Response)
-def predict(request: SequenceRequest):
+def predict(request):
     with tempfile.TemporaryDirectory() as tmpdirname:
         try:
            os.makedirs(os.path.join(tmpdirname, "salmon_out"))
@@ -98,5 +92,27 @@ def predict(request: SequenceRequest):
             _ = seq_grep_r1.communicate(input=request.reads_1.encode())
             _ = seq_grep_r2.communicate(input=request.reads_2.encode())
             salmon_kargs["paired"] = True 
-    headers = {'Content-Disposition': 'attachment; filename="inference.csv"'}
-    return Response(pd.DataFrame(inference).to_csv(), headers=headers, media_type="text/csv")
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-o", "--out",
+        default="./",
+        type=str,
+        help="Path to the output directory, where the files will be saved",
+    )
+    parser.add_argument(
+        "-1", "--reads_1", default="", type=str
+    )
+    parser.add_argument(
+        "-2", "--reads_2", default="", type=str
+    )
+    parser.add_argument(
+        "--format", default="fastq", type=str
+    )
+    args = parser.parse_args()
+
+    predict(args)
+    
+if __name__ == "__main__":
+    main()

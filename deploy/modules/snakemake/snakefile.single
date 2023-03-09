@@ -4,7 +4,7 @@ from os.path import join
 INDEX = config["index"]
 INPUT_DIR = config["input_path"]
 OUTPUT_DIR = config["output_path"]
-SALMON_PATH = config["salmon"].format(sys.platform)
+SALMON_PATH = config["salmon"]
 NUM_THREADS = str(config["num_threads"])
 EXPR_TYPE = config["exprtype"]
 SAMPLES_FQ = glob_wildcards(join(INPUT_DIR, "{sample}.fastq")).sample
