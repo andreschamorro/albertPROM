@@ -1,5 +1,9 @@
 import os
 import argparse
+<<<<<<< HEAD
+=======
+import tempfile
+>>>>>>> dev
 import snakemake
 import subprocess
 import requests
@@ -10,6 +14,8 @@ import pandas as pd
 from Bio import SeqIO
 from itertools import repeat
 from transformers import pipeline
+
+pipe = pipeline("sentiment-analysis", "deploy/models/transcript", framework="pt", num_workers=16)
 
 def _salmon(**kwargs):
     import snakemake
@@ -29,6 +35,9 @@ def _salmon(**kwargs):
         lock=False
     )
 
+def _kmer_split(k: int, sequence: str) -> List[str]:
+    return " ".join([sequence[j: j + k] for j in range(len(sequence) - k + 1)])
+
 def _read(ffile, fformat):
     for feature in SeqIO.parse(ffile, fformat):
         yield feature 
@@ -46,52 +55,56 @@ def kmer_generator_single(request, k=15, sep_token=""):
                 [_kmer_split(k, str(r1.seq)), repeat("")])
 
 def predict(request):
-    with tempfile.TemporaryDirectory() as tmpdirname:
-        try:
-           os.makedirs(os.path.join(tmpdirname, "salmon_out"))
-        except FileExistsError:
-           # directory already exists
-           pass
-        salmon_kargs = {
-            "input_path": tmpdirname,
-            "outpath": os.path.join(tmpdirname, "salmon_out"),
-            "index": "resource/IntactL1ElementsFLI-L1Ens84.38",
-            "num_threads": 16,
-            "exprtype": "TPM"
-        }
-        # Single reads
-        if request.reads_2 == "":
-            inference = pipe(kmer_generator_single(request))
-            line1_ids = [r.id for r, inf in zip(_read(request.reads_1, request.fformat), inference)
-                                        if inf['label'] == 'presence']
-            with open(os.path.join(tmpdirname, "presence_ids.list"), 'w') as pre_ids:
-                pre_ids.write('\n'.join(line1_ids))
-            seq_grep = subprocess.Popen(['seqkit', 
-                                         'grep', '-f', os.path.join(tmpdirname, "presence_ids.list"),
-                                         '-', '-o', os.path.join(tmpdirname, "presence_R1.fa")], 
-                                        stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-            _ = seq_grep.communicate(input=request.reads_1.encode())
-            salmon_kargs["paired"] = False
-            # Write Temp line-1 reads
-        else:
-            inference = pipe(kmer_generator_single(request))
-            # TODO
-            # r1 and r2 has the same id
-            line1_ids = [r1.id for r1, inf in zip(_read(request.reads_1, request.fformat), inference)
-                                        if inf['label'] == 'presence']
-            with open(os.path.join(tmpdirname, "presence_ids.list"), 'w') as pre_ids:
-                pre_ids.write('\n'.join(line1_ids))
-            seq_grep_r1 = subprocess.Popen(['seqkit', 
-                                         'grep', '-f', os.path.join(tmpdirname, "presence_ids.list"),
-                                         '-', '-o', os.path.join(tmpdirname, "presence_R1.fa")], 
-                                        stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-            seq_grep_r2 = subprocess.Popen(['seqkit', 
-                                         'grep', '-f', os.path.join(tmpdirname, "presence_ids.list"),
-                                         '-', '-o', os.path.join(tmpdirname, "presence_R2.fa")], 
-                                        stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-            _ = seq_grep_r1.communicate(input=request.reads_1.encode())
-            _ = seq_grep_r2.communicate(input=request.reads_2.encode())
-            salmon_kargs["paired"] = True 
+    try:
+       os.makedirs(request.out)
+    except FileExistsError:
+       # directory already exists
+       pass
+    try:
+       os.makedirs(os.path.join(request.out, "salmon_out"))
+    except FileExistsError:
+       # directory already exists
+       pass
+    salmon_kargs = {
+        "input_path": request.out,
+        "outpath": os.path.join(request.out, "salmon_out"),
+        "index": "resource/IntactL1ElementsFLI-L1Ens84.38",
+        "num_threads": 16,
+        "exprtype": "TPM"
+    }
+    # Single reads
+    if request.reads_2 == "":
+        inference = pipe(kmer_generator_single(request))
+        line1_ids = [r.id for r, inf in zip(_read(request.reads_1, request.fformat), inference)
+                                    if inf['label'] == 'presence']
+        with open(os.path.join(request.out, "presence_ids.list"), 'w') as pre_ids:
+            pre_ids.write('\n'.join(line1_ids))
+        seq_grep = subprocess.Popen(['seqkit', 
+                                     'grep', '-f', os.path.join(request.out, "presence_ids.list"),
+                                     '-', '-o', os.path.join(request.out, "presence_R1.fa")], 
+                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        _ = seq_grep.communicate(input=request.reads_1.encode())
+        salmon_kargs["paired"] = False
+        # Write Temp line-1 reads
+    else:
+        inference = pipe(kmer_generator_single(request))
+        # TODO
+        # r1 and r2 has the same id
+        line1_ids = [r1.id for r1, inf in zip(_read(request.reads_1, request.fformat), inference)
+                                    if inf['label'] == 'presence']
+        with open(os.path.join(request.out, "presence_ids.list"), 'w') as pre_ids:
+            pre_ids.write('\n'.join(line1_ids))
+        seq_grep_r1 = subprocess.Popen(['seqkit', 
+                                     'grep', '-f', os.path.join(request.out, "presence_ids.list"),
+                                     '-', '-o', os.path.join(request.out, "presence_R1.fa")], 
+                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        seq_grep_r2 = subprocess.Popen(['seqkit', 
+                                     'grep', '-f', os.path.join(request.out, "presence_ids.list"),
+                                     '-', '-o', os.path.join(request.out, "presence_R2.fa")], 
+                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        _ = seq_grep_r1.communicate(input=request.reads_1.encode())
+        _ = seq_grep_r2.communicate(input=request.reads_2.encode())
+        salmon_kargs["paired"] = True 
 
 def main():
     parser = argparse.ArgumentParser()
@@ -108,7 +121,7 @@ def main():
         "-2", "--reads_2", default="", type=str
     )
     parser.add_argument(
-        "--format", default="fastq", type=str
+        "--fformat", default="fastq", type=str
     )
     args = parser.parse_args()
 
