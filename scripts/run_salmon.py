@@ -5,6 +5,7 @@ import snakemake
 import subprocess
 import requests
 import json
+from tqdm import tqdm
 from io import StringIO
 from typing import Optional, List
 import pandas as pd
@@ -18,6 +19,8 @@ from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer
 )
+from transformers.utils import PaddingStrategy
+from transformers.tokenization_utils_base import TruncationStrategy
 
 
 def _salmon(**kwargs):
@@ -78,7 +81,7 @@ def predict(request, pipe):
     # Single reads
     if request.reads_2 == "":
         inference = pipe(kmer_generator_single(request))
-        line1_ids = [r.id for r, inf in zip(_read(request.reads_1, request.fformat), inference)
+        line1_ids = [r.id for r, inf in zip(_read(request.reads_1, request.fformat), tqdm(inference))
                                     if inf['label'] == 'presence']
         with open(os.path.join(request.out, "presence_ids.list"), 'w') as pre_ids:
             pre_ids.write('\n'.join(line1_ids))
@@ -91,10 +94,10 @@ def predict(request, pipe):
         _salmon(salmon_kargs)
         # Write Temp line-1 reads
     else:
-        inference = pipe(kmer_generator_single(request))
+        inference = pipe(kmer_generator_single(request), padding="max_length", max_length=512, truncation=True)
         # TODO
         # r1 and r2 has the same id
-        line1_ids = [r1.id for r1, inf in zip(_read(request.reads_1, request.fformat), inference)
+        line1_ids = [r1.id for r1, inf in zip(_read(request.reads_1, request.fformat), tqdm(inference))
                                     if inf['label'] == 'presence']
         with open(os.path.join(request.out, "presence_ids.list"), 'w') as pre_ids:
             pre_ids.write('\n'.join(line1_ids))
@@ -130,7 +133,6 @@ def main():
     )
     args = parser.parse_args()
 
-pipe = pipeline("sentiment-analysis", "deploy/models/transcript", framework="pt", num_workers=16)
     config = AutoConfig.from_pretrained(
         "deploy/models/transcript",
         num_labels=2,
@@ -141,7 +143,7 @@ pipe = pipeline("sentiment-analysis", "deploy/models/transcript", framework="pt"
         "deploy/models/transcript",
         use_fast=True,
         model_max_length=512,
-        truncation_side='right'
+        truncation_side='right',
         use_auth_token=None,
     )
     model = AutoModelForSequenceClassification.from_pretrained(
@@ -149,6 +151,7 @@ pipe = pipeline("sentiment-analysis", "deploy/models/transcript", framework="pt"
         config=config,
         use_auth_token=None,
     )
+
     pipe = TextClassificationPipeline(model=model, tokenizer=tokenizer, batch_size=32)
     predict(args, pipe)
     
