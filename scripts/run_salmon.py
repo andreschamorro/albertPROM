@@ -91,7 +91,7 @@ def predict(request, pipe):
                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         _ = seq_grep.communicate()
         salmon_kargs["paired"] = False
-        _salmon(salmon_kargs)
+        _salmon(**salmon_kargs)
         # Write Temp line-1 reads
     else:
         inference = pipe(kmer_generator_single(request), padding="max_length", max_length=512, truncation=True)
@@ -112,7 +112,7 @@ def predict(request, pipe):
         _ = seq_grep_r1.communicate()
         _ = seq_grep_r2.communicate()
         salmon_kargs["paired"] = True 
-        _salmon(salmon_kargs)
+        _salmon(**salmon_kargs)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -143,7 +143,6 @@ def main():
         "deploy/models/transcript",
         use_fast=True,
         model_max_length=512,
-        truncation_side='right',
         use_auth_token=None,
     )
     model = AutoModelForSequenceClassification.from_pretrained(
@@ -152,7 +151,7 @@ def main():
         use_auth_token=None,
     )
 
-    pipe = TextClassificationPipeline(model=model, tokenizer=tokenizer, batch_size=32)
+    pipe = TextClassificationPipeline(model=model, tokenizer=tokenizer, batch_size=16)
     predict(args, pipe)
     
 if __name__ == "__main__":
