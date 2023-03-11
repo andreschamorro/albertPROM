@@ -127,13 +127,14 @@ def predict(request, pipe):
     logger.info("  Num examples = %d", len(raw_datasets))
     logger.info("  Batch size = %d", request.eval_batch_size)
     time_start = time.time()
-    inference = pipe(KeyDataset(raw_datasets, "sequence"), padding="max_length", max_length=512, truncation=True)
+    inference = pipe(KeyDataset(raw_datasets, "sequence"), batch_size=request.eval_batch_size, padding="max_length", max_length=512, truncation=True)
     # TODO
     # r1 and r2 has the same id
-    line1_ids = [(r1.id, r1.id) for r1, r2, inf in zip(_read(request.reads_1, request.fformat),
-                                          _read(request.reads_2, request.fformat), tqdm(inference))
+    line1_ids = [(r1.id, r2.id) for r1, r2, inf in zip(_read(request.reads_1, request.fformat),
+                                          _read(request.reads_2, request.fformat), tqdm(inference, total=len(raw_datasets)))
                                 if inf['label'] == 'presence']
     time_end = time.time()
+    logger.info("  Prediction elapsed time %.5f", time_end-time_start)
     with open(os.path.join(request.out, "presence_ids_R1.list"), 'w') as pre_ids:
         pre_ids.write('\n'.join([i1 for i1, i2 in line1_ids]))
     with open(os.path.join(request.out, "presence_ids_R2.list"), 'w') as pre_ids:
@@ -235,7 +236,7 @@ def main():
         use_auth_token=None,
     )
 
-    pipe = TextClassificationPipeline(model=model, tokenizer=tokenizer, batch_size=16)
+    pipe = TextClassificationPipeline(model=model, tokenizer=tokenizer, device=args.device)
     predict(args, pipe)
     
 if __name__ == "__main__":
