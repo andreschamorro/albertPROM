@@ -82,7 +82,7 @@ rule collect_mappability:
                 data = json.load(inp)
             sid = file.split("/")[-3]
             return { 
-                "SampleID" : sid, 
+                "id" : sid, 
                 "num_mapped": data["num_mapped"], 
                 "num_processed" : data["num_processed"], 
                 "percent_mapped": data["percent_mapped"] }
@@ -93,4 +93,4 @@ rule collect_mappability:
 
         import pandas as pd
         with open(str(output), "w") as oup:
-            oup.write(pd.DataFrame(tb).set_index("SampleID").to_csv(sep=",", index_label="SampleID"))
+            oup.write(pd.DataFrame(tb).set_index("id").to_csv(sep=",", index_label="id"))

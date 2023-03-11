@@ -49,6 +49,9 @@ logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(messa
 logging.getLogger("transformers.modeling_utils").setLevel(
         logging.WARN)  # Reduce logging
 
+# Default memory profile file
+mem_profile = sys.stdout
+
 
 def ids_tensor(shape, vocab_size, rng=None, name=None):
     #  Creates a random int32 tensor of the shape within the vocab size
@@ -85,17 +88,17 @@ def _to_jit(requests, model):
 @profile(stream=mem_profile)
 def _salmon(**kwargs):
     import snakemake
-    snakefile = os.path.join(os.path.dirname(__file__), "snakemake/snakefile.paired" if kwargs["paired"] else "snakemake/snakefile.single")
+    snakefile = "deploy/resources/snakemake/snakefile.paired" if kwargs["paired"] else "deploy/resources/snakemake/snakefile.single"
 
     snakemake.snakemake(
         snakefile=snakefile,
         config={
-            "input_path": kwargs["inpath"],
+            "input_path": kwargs["input_path"],
             "output_path": kwargs["--outpath"],
-            "index": kwargs["--reference"],
+            "index": kwargs["index"],
             "salmon": os.path.join(os.path.expanduser('~'),".local/bin/salmon"),
-            "num_threads" : kwargs["--num_threads"],
-            "exprtype": kwargs["--exprtype"],
+            "num_threads" : kwargs["num_threads"],
+            "exprtype": kwargs["exprtype"],
         },
         quiet=True,
         lock=False
@@ -122,8 +125,8 @@ def predict(request, model: RecursiveScriptModule, tokenizer):
        pass
     salmon_kargs = {
         "input_path": request.out,
-        "outpath": os.path.join(request.out, "salmon_out"),
-        "index": "deploy/resource/IntactL1ElementsFLI-L1Ens84.38",
+        "output_path": os.path.join(request.out, "salmon_out"),
+        "index": "deploy/resources/IntactL1ElementsFLI-L1Ens84.38",
         "num_threads": 16,
         "exprtype": "TPM",
         "paired": True,
@@ -197,7 +200,7 @@ def predict(request, model: RecursiveScriptModule, tokenizer):
     _ = seq_grep_r2.communicate(input=b'\n'.join(line1_ids))
     logger.info("***** Running Salom {} *****".format(request.prefix))
     time_start = time.clock()
-    _salmon(salmon_kargs)
+    _salmon(**salmon_kargs)
     time_end = time.clock()
     logger.info("  Salmon elapsed time %.5f", time_end-time_start)
 
@@ -262,8 +265,6 @@ def main():
         # Setup memory profile
     if args.mem_profile:
         mem_profile = open(f"memory_profile_{datetime.now().strftime('%m/%d/%Y %H:%M:%S')}",'w+')
-    else:
-        mem_profile = sys.stdout
 
     tokenizer = AutoTokenizer.from_pretrained(
         "deploy/models/transcript",
