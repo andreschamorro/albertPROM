@@ -18,6 +18,7 @@ import logging
 from memory_profiler import profile
 from datetime import datetime
 import time
+import snakemake
 
 from transformers import (
     pipeline,
@@ -87,14 +88,13 @@ def _to_jit(requests, model):
 
 @profile(stream=mem_profile)
 def _salmon(**kwargs):
-    import snakemake
     snakefile = "deploy/resources/snakemake/snakefile.paired" if kwargs["paired"] else "deploy/resources/snakemake/snakefile.single"
 
     snakemake.snakemake(
         snakefile=snakefile,
         config={
             "input_path": kwargs["input_path"],
-            "output_path": kwargs["--outpath"],
+            "output_path": kwargs["output_path"],
             "index": kwargs["index"],
             "salmon": os.path.join(os.path.expanduser('~'),".local/bin/salmon"),
             "num_threads" : kwargs["num_threads"],
@@ -135,7 +135,7 @@ def predict(request, model: RecursiveScriptModule, tokenizer):
     model = model.to(request.device)
     model.eval()
     # Predict
-    ## Proprocessing
+    ## Preprocessing
     read_1_key, read_2_key = "read_1", "read_2"
     def preprocess_function(examples):
         # Tokenize the reads
@@ -167,7 +167,7 @@ def predict(request, model: RecursiveScriptModule, tokenizer):
     logger.info("***** Running prediction {} *****".format(request.prefix))
     logger.info("  Num examples = %d", len(raw_datasets))
     logger.info("  Batch size = %d", request.eval_batch_size)
-    time_start = time.clock()
+    time_start = time.time()
     preds = None
     for batch in tqdm(dataloader, desc="Evaluating"):
         model.eval()
@@ -184,7 +184,7 @@ def predict(request, model: RecursiveScriptModule, tokenizer):
         else:
             preds = np.append(preds, logits.detach().cpu().numpy(), axis=0)
     preds = np.argmax(preds, axis=1)
-    time_end = time.clock()
+    time_end = time.time()
     logger.info("  Prediction elapsed time %.5f", time_end-time_start)
     # r1 and r2 has the same id
     line1_ids = [r1.id.encode() for r1, p in zip(_read(request.reads_1, request.fformat), preds) if p == 0]
@@ -199,9 +199,9 @@ def predict(request, model: RecursiveScriptModule, tokenizer):
     _ = seq_grep_r1.communicate(input=b'\n'.join(line1_ids))
     _ = seq_grep_r2.communicate(input=b'\n'.join(line1_ids))
     logger.info("***** Running Salom {} *****".format(request.prefix))
-    time_start = time.clock()
+    time_start = time.time()
     _salmon(**salmon_kargs)
-    time_end = time.clock()
+    time_end = time.time()
     logger.info("  Salmon elapsed time %.5f", time_end-time_start)
 
 def main():
