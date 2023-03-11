@@ -216,7 +216,7 @@ def main():
         logging.basicConfig(filename=args.log_file, filemode='w+')
         # Setup memory profile
     if args.mem_profile:
-        mem_profile = open(f"memory_profile_{datetime.now().strftime('%m/%d/%Y %H:%M:%S')}",'w+')
+        mem_profile = open(args.mem_profile,'w')
 
     config = AutoConfig.from_pretrained(
         "deploy/models/transcript",
