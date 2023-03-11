@@ -1,4 +1,5 @@
 import os
+import sys
 import argparse
 import random
 import tempfile
@@ -14,6 +15,9 @@ import pandas as pd
 from Bio import SeqIO
 from itertools import repeat
 import logging
+from memory_profiler import profile
+from datetime import datetime
+import time
 
 from transformers import (
     pipeline,
@@ -36,16 +40,15 @@ from torch.utils.data import (
 from torch.quantization import quantize_dynamic_jit
 from torch.jit import RecursiveScriptModule
 
-print(torch.__version__)
-
 # Setup logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                     datefmt = '%m/%d/%Y %H:%M:%S',
-                    level = logging.WARN)
+                    level = logging.INFO)
 
 logging.getLogger("transformers.modeling_utils").setLevel(
         logging.WARN)  # Reduce logging
+
 
 def ids_tensor(shape, vocab_size, rng=None, name=None):
     #  Creates a random int32 tensor of the shape within the vocab size
@@ -79,6 +82,7 @@ def _to_jit(requests, model):
     traced_model = torch.jit.trace(model, dummy_input)
     return traced_model
 
+@profile(stream=mem_profile)
 def _salmon(**kwargs):
     import snakemake
     snakefile = os.path.join(os.path.dirname(__file__), "snakemake/snakefile.paired" if kwargs["paired"] else "snakemake/snakefile.single")
@@ -104,6 +108,7 @@ def _read(ffile, fformat):
     for feature in SeqIO.parse(ffile, fformat):
         yield feature 
 
+@profile(stream=mem_profile)
 def predict(request, model: RecursiveScriptModule, tokenizer):
     try:
        os.makedirs(request.out)
@@ -159,7 +164,7 @@ def predict(request, model: RecursiveScriptModule, tokenizer):
     logger.info("***** Running prediction {} *****".format(request.prefix))
     logger.info("  Num examples = %d", len(raw_datasets))
     logger.info("  Batch size = %d", request.eval_batch_size)
-
+    time_start = time.clock()
     preds = None
     for batch in tqdm(dataloader, desc="Evaluating"):
         model.eval()
@@ -176,6 +181,8 @@ def predict(request, model: RecursiveScriptModule, tokenizer):
         else:
             preds = np.append(preds, logits.detach().cpu().numpy(), axis=0)
     preds = np.argmax(preds, axis=1)
+    time_end = time.clock()
+    logger.info("  Prediction elapsed time %.5f", time_end-time_start)
     # r1 and r2 has the same id
     line1_ids = [r1.id.encode() for r1, p in zip(_read(request.reads_1, request.fformat), preds) if p == 0]
     seq_grep_r1 = subprocess.Popen(['seqkit', 
@@ -183,12 +190,16 @@ def predict(request, model: RecursiveScriptModule, tokenizer):
                                  request.reads_1, '-o', os.path.join(request.out, "presence_R1.fa")], 
                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     seq_grep_r2 = subprocess.Popen(['seqkit', 
-                                 'grep', '-f', -,
+                                 'grep', '-f', '-',
                                  request.reads_2, '-o', os.path.join(request.out, "presence_R2.fa")], 
                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    _ = seq_grep_r1.communicate(inputs=b'\n'.join(line1_ids))
-    _ = seq_grep_r2.communicate(inputs=b'\n'.join(line1_ids))
+    _ = seq_grep_r1.communicate(input=b'\n'.join(line1_ids))
+    _ = seq_grep_r2.communicate(input=b'\n'.join(line1_ids))
+    logger.info("***** Running Salom {} *****".format(request.prefix))
+    time_start = time.clock()
     _salmon(salmon_kargs)
+    time_end = time.clock()
+    logger.info("  Salmon elapsed time %.5f", time_end-time_start)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -238,7 +249,21 @@ def main():
     parser.add_argument(
         "--overwrite_cache", default=False, type=bool
     )
+    parser.add_argument(
+        "--log_file", default=None, type=str
+    )
+    parser.add_argument(
+        "--mem_profile", default=None, type=str
+    )
     args = parser.parse_args()
+
+    if args.log_file:
+        logging.basicConfig(filename=args.log_file, filemode='w+')
+        # Setup memory profile
+    if args.mem_profile:
+        mem_profile = open(f"memory_profile_{datetime.now().strftime('%m/%d/%Y %H:%M:%S')}",'w+')
+    else:
+        mem_profile = sys.stdout
 
     tokenizer = AutoTokenizer.from_pretrained(
         "deploy/models/transcript",
