@@ -1,4 +1,5 @@
 import os
+import sys
 import argparse
 import tempfile
 import snakemake
@@ -26,6 +27,7 @@ from transformers import (
 )
 from transformers.utils import PaddingStrategy
 from transformers.tokenization_utils_base import TruncationStrategy
+from transformers.pipelines.pt_utils import KeyDataset
 import datasets
 
 # Setup logging
@@ -98,13 +100,31 @@ def predict(request, pipe):
         "paired": True,
     }
     ## Preprocessing
-    raw_datasets = datasets.load_dataset("loaders/fast_script.py", name="paired_fast", data_files={"read_1": request.reads_1, "read_2": request.reads_2})
+    read_1_key, read_2_key = "read_1", "read_2"
+    def preprocess_function(examples):
+        # Tokenize the reads
+        kmer_example = {"sequence": [" ".join(
+            [" ".join(kr) for kr in map(lambda r: _kmer_split(request.model_ksize, r), z)]) 
+                        for z in zip(examples[read_1_key],  examples[read_2_key])]}
+        return kmer_example
+    raw_datasets = datasets.load_dataset("loaders/fast_script.py", name="paired_fast", data_files={"read_1": request.reads_1, "read_2": request.reads_2},, split="train")
+    request.eval_batch_size = request.per_gpu_eval_batch_size * max(1, request.n_gpu)
+
+    column_names = raw_datasets.column_names
+    raw_datasets = raw_datasets.map(
+        preprocess_function,
+        batched=True,
+        num_proc=request.preprocessing_num_workers,
+        remove_columns=column_names,
+        load_from_cache_file=False,
+        desc="Running tokenizer on dataset",
+    )
 
     logger.info("***** Running prediction {} *****".format(request.prefix))
     logger.info("  Num examples = %d", len(raw_datasets))
     logger.info("  Batch size = %d", request.eval_batch_size)
     time_start = time.time()
-    inference = pipe(raw_datasets, padding="max_length", max_length=512, truncation=True)
+    inference = pipe(KeyDataset(raw_datasets, "sequence"), padding="max_length", max_length=512, truncation=True)
     # TODO
     # r1 and r2 has the same id
     line1_ids = [r1.id for r1, inf in zip(_read(request.reads_1, request.fformat), tqdm(inference))
@@ -136,6 +156,9 @@ def main():
         default="./",
         type=str,
         help="Path to the output directory, where the files will be saved",
+    )
+    parser.add_argument(
+        "-p", "--prefix", default="", type=str
     )
     parser.add_argument(
         "-1", "--reads_1", default="", type=str
