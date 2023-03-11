@@ -96,7 +96,7 @@ def _salmon(**kwargs):
             "input_path": kwargs["input_path"],
             "output_path": kwargs["output_path"],
             "index": kwargs["index"],
-            "salmon": os.path.join(os.path.expanduser('~'),".local/bin/salmon"),
+            "salmon": os.path.join(os.path.expanduser('~'),".local/opt/salmon/bin/salmon"),
             "num_threads" : kwargs["num_threads"],
             "exprtype": kwargs["exprtype"],
         },
@@ -190,11 +190,11 @@ def predict(request, model: RecursiveScriptModule, tokenizer):
     line1_ids = [r1.id.encode() for r1, p in zip(_read(request.reads_1, request.fformat), preds) if p == 0]
     seq_grep_r1 = subprocess.Popen(['seqkit', 
                                  'grep', '-f', '-',
-                                 request.reads_1, '-o', os.path.join(request.out, "presence_R1.fa")], 
+                                 request.reads_1, '-o', os.path.join(request.out, "presence_R1.fq")], 
                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     seq_grep_r2 = subprocess.Popen(['seqkit', 
                                  'grep', '-f', '-',
-                                 request.reads_2, '-o', os.path.join(request.out, "presence_R2.fa")], 
+                                 request.reads_2, '-o', os.path.join(request.out, "presence_R2.fq")], 
                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     _ = seq_grep_r1.communicate(input=b'\n'.join(line1_ids))
     _ = seq_grep_r2.communicate(input=b'\n'.join(line1_ids))

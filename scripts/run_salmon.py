@@ -52,7 +52,8 @@ def _salmon(**kwargs):
             "input_path": kwargs["input_path"],
             "output_path": kwargs["output_path"],
             "index": kwargs["index"],
-            "salmon": os.path.join(os.path.expanduser('~'),".local/bin/salmon"),
+            "index_label": kwargs["index_label"], 
+            "salmon": os.path.join(os.path.expanduser('~'),".local/opt/salmon/bin/salmon"),
             "num_threads" : kwargs["num_threads"],
             "exprtype": kwargs["exprtype"],
         },
@@ -95,6 +96,7 @@ def predict(request, pipe):
         "input_path": request.out,
         "output_path": os.path.join(request.out, "salmon_out"),
         "index": "deploy/resources/IntactL1ElementsFLI-L1Ens84.38",
+        "index_label": "fli-l1", 
         "num_threads": 16,
         "exprtype": "TPM",
         "paired": True,
@@ -107,7 +109,8 @@ def predict(request, pipe):
             [" ".join(kr) for kr in map(lambda r: _kmer_split(request.model_ksize, r), z)]) 
                         for z in zip(examples[read_1_key],  examples[read_2_key])]}
         return kmer_example
-    raw_datasets = datasets.load_dataset("loaders/fast_script.py", name="paired_fast", data_files={"read_1": request.reads_1, "read_2": request.reads_2},, split="train")
+
+    raw_datasets = datasets.load_dataset("loaders/fast_script.py", name="paired_fast", data_files={"read_1": request.reads_1, "read_2": request.reads_2}, split="train")
     request.eval_batch_size = request.per_gpu_eval_batch_size * max(1, request.n_gpu)
 
     column_names = raw_datasets.column_names
@@ -127,18 +130,21 @@ def predict(request, pipe):
     inference = pipe(KeyDataset(raw_datasets, "sequence"), padding="max_length", max_length=512, truncation=True)
     # TODO
     # r1 and r2 has the same id
-    line1_ids = [r1.id for r1, inf in zip(_read(request.reads_1, request.fformat), tqdm(inference))
+    line1_ids = [(r1.id, r1.id) for r1, r2, inf in zip(_read(request.reads_1, request.fformat),
+                                          _read(request.reads_2, request.fformat), tqdm(inference))
                                 if inf['label'] == 'presence']
     time_end = time.time()
-    with open(os.path.join(request.out, "presence_ids.list"), 'w') as pre_ids:
-        pre_ids.write('\n'.join(line1_ids))
+    with open(os.path.join(request.out, "presence_ids_R1.list"), 'w') as pre_ids:
+        pre_ids.write('\n'.join([i1 for i1, i2 in line1_ids]))
+    with open(os.path.join(request.out, "presence_ids_R2.list"), 'w') as pre_ids:
+        pre_ids.write('\n'.join([i2 for i1, i2 in line1_ids]))
     seq_grep_r1 = subprocess.Popen(['seqkit', 
-                                 'grep', '-f', os.path.join(request.out, "presence_ids.list"),
-                                 request.reads_1, '-o', os.path.join(request.out, "presence_R1.fa")], 
+                                 'grep', '-f', os.path.join(request.out, "presence_ids_R1.list"),
+                                 request.reads_1, '-o', os.path.join(request.out, "presence_R1.fq")], 
                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     seq_grep_r2 = subprocess.Popen(['seqkit', 
-                                 'grep', '-f', os.path.join(request.out, "presence_ids.list"),
-                                 request.reads_2, '-o', os.path.join(request.out, "presence_R2.fa")], 
+                                 'grep', '-f', os.path.join(request.out, "presence_ids_R2.list"),
+                                 request.reads_2, '-o', os.path.join(request.out, "presence_R2.fq")], 
                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     _ = seq_grep_r1.communicate()
     _ = seq_grep_r2.communicate()

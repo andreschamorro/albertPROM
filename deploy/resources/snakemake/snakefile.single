@@ -2,13 +2,14 @@ import sys
 from os.path import join
 
 INDEX = config["index"]
+INDEX_LABEL = config["index_label"]
 INPUT_DIR = config["input_path"]
 OUTPUT_DIR = config["output_path"]
 SALMON_PATH = config["salmon"]
 NUM_THREADS = str(config["num_threads"])
+SAMPLES_FQ = glob_wildcards(join(INPUT_DIR, "{sample}.fq")).sample
+SAMPLES_GZ = glob_wildcards(join(INPUT_DIR, "{sample}.fq.gz")).sample
 EXPR_TYPE = config["exprtype"]
-SAMPLES_FQ = glob_wildcards(join(INPUT_DIR, "{sample}.fastq")).sample
-SAMPLES_GZ = glob_wildcards(join(INPUT_DIR, "{sample}.fastq.gz")).sample
 
 rule all:
     input:
@@ -18,7 +19,7 @@ rule all:
 rule run_salmon_fq:
     input:
         idx = INDEX,
-        r = join(INPUT_DIR,"{sample_fq}.fastq")
+        r = join(INPUT_DIR,"{sample_fq}.fq")
     
     output:
         directory(join(OUTPUT_DIR,"{sample_fq}"))
@@ -30,7 +31,7 @@ rule run_salmon_fq:
 rule run_salmon_gz:
     input:
         idx = INDEX,
-        r = join(INPUT_DIR,"{sample_gz}.fastq.gz")
+        r = join(INPUT_DIR,"{sample_gz}.fq.gz")
     
     output:
         directory(join(OUTPUT_DIR,"{sample_gz}"))
@@ -66,7 +67,7 @@ rule collect_abundance:
 
         import pandas as pd
         with open(str(output), "w") as oup:
-            oup.write(pd.DataFrame(tb).to_csv(sep=",", index_label="TE"))
+            oup.write(pd.DataFrame(tb).to_csv(sep=",", index_label=INDEX_LABEL"))
 
 
 rule collect_mappability:

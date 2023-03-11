@@ -2,24 +2,25 @@ import sys
 from os.path import join
 
 INDEX = config["index"]
+INDEX_LABEL = config["index_label"]
 INPUT_DIR = config["input_path"]
 OUTPUT_DIR = config["output_path"]
 SALMON_PATH = config["salmon"]
 NUM_THREADS = str(config["num_threads"])
-SAMPLES_FQ = glob_wildcards(join(INPUT_DIR, "{sample}_R1.fastq")).sample
-SAMPLES_GZ = glob_wildcards(join(INPUT_DIR, "{sample}_R1.fastq.gz")).sample
+SAMPLES_FQ = glob_wildcards(join(INPUT_DIR, "{sample}_R1.fq")).sample
+SAMPLES_GZ = glob_wildcards(join(INPUT_DIR, "{sample}_R1.fq.gz")).sample
 EXPR_TYPE = config["exprtype"]
 
 rule all:
     input:
         join(OUTPUT_DIR,"expr.csv"),
-        join(OUTPUT_DIR,"MAPPING_INFO.csv")
+        join(OUTPUT_DIR,"mapping_info.csv")
 
 rule run_salmon_fq:
     input:
         idx = INDEX,
-        r1 = join(INPUT_DIR, "{sample_fq}_R1.fastq"),
-        r2 = join(INPUT_DIR, "{sample_fq}_R2.fastq")
+        r1 = join(INPUT_DIR, "{sample_fq}_R1.fq"),
+        r2 = join(INPUT_DIR, "{sample_fq}_R2.fq")
     output:
         directory(join(OUTPUT_DIR,"{sample_fq}"))
 
@@ -30,8 +31,8 @@ rule run_salmon_fq:
 rule run_salmon_gz:
     input:
         idx = INDEX,
-        r1 = join(INPUT_DIR, "{sample_gz}_R1.fastq.gz"),
-        r2 = join(INPUT_DIR, "{sample_gz}_R2.fastq.gz")
+        r1 = join(INPUT_DIR, "{sample_gz}_R1.fq.gz"),
+        r2 = join(INPUT_DIR, "{sample_gz}_R2.fq.gz")
     output:
         directory(join(OUTPUT_DIR,"{sample_gz}"))
 
@@ -65,7 +66,7 @@ rule collect_abundance:
 
         import pandas as pd
         with open(str(output), "w") as oup:
-            oup.write(pd.DataFrame(tb).to_csv(sep=",", index_label="TE"))
+            oup.write(pd.DataFrame(tb).to_csv(sep=",", index_label=INDEX_LABEL))
 
 
 rule collect_mappability:
@@ -73,7 +74,7 @@ rule collect_mappability:
         expand(join(OUTPUT_DIR,"{sample_fq}"), sample_fq = SAMPLES_FQ) +
         expand(join(OUTPUT_DIR,"{sample_gz}"), sample_gz = SAMPLES_GZ) 
     output:
-        join(OUTPUT_DIR,"MAPPING_INFO.csv")
+        join(OUTPUT_DIR,"mapping_info.csv")
     run:
         def get_mappability(fname):
             import json
