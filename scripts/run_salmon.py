@@ -127,7 +127,7 @@ def predict(request, pipe):
     logger.info("  Num examples = %d", len(raw_datasets))
     logger.info("  Batch size = %d", request.eval_batch_size)
     time_start = time.time()
-    inference = pipe(KeyDataset(raw_datasets, "sequence"), batch_size=request.eval_batch_size, padding="max_length", max_length=512, truncation=True)
+    inference = pipe(KeyDataset(raw_datasets, "sequence"), padding="max_length", max_length=512, truncation=True)
     # TODO
     # r1 and r2 has the same id
     line1_ids = [(r1.id, r2.id) for r1, r2, inf in zip(_read(request.reads_1, request.fformat),
@@ -236,7 +236,9 @@ def main():
         use_auth_token=None,
     )
 
-    pipe = TextClassificationPipeline(model=model, tokenizer=tokenizer, device=args.device)
+    pipe = TextClassificationPipeline(model=model, tokenizer=tokenizer,
+                                      num_workers=args.preprocessing_num_workers,
+                                      device=args.device)
     predict(args, pipe)
     
 if __name__ == "__main__":
