@@ -56,7 +56,7 @@ r_index.sort(reverse=True)
 all_targets.extend([1 for i in r_index])
 
 with open(f"{a_prefix}1.fq", "r") as ar1_file, open(f"{a_prefix}2.fq", "r") as ar2_file:
-    all_features.extend([(_processing(r1, "absence"), _processing(r1, "absence")) 
+    all_features.extend([(_processing(r1, "absence"), _processing(r2, "absence"))
                          for i, (r1, r2) in enumerate(zip(SeqIO.parse(ar1_file, "fastq"), SeqIO.parse(ar2_file, "fastq"))) 
                             if pop_if(r_index, i)])
 

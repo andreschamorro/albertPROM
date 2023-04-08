@@ -39,10 +39,7 @@ logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(messa
 logging.getLogger("transformers.modeling_utils").setLevel(
         logging.WARN)  # Reduce logging
 
-# Default memory profile file
-mem_profile = sys.stdout
-
-@profile(stream=mem_profile)
+@profile(stream=sys.stdout)
 def _salmon(**kwargs):
     snakefile = "deploy/resources/snakemake/snakefile.paired" if kwargs["paired"] else "deploy/resources/snakemake/snakefile.single"
 
@@ -80,7 +77,7 @@ def kmer_generator_single(request, k=15, sep_token=""):
         yield f" ".join(
                 [_kmer_split(k, str(r1.seq)), r2])
 
-@profile(stream=mem_profile)
+@profile(stream=sys.stdout)
 def predict(request, pipe):
     try:
        os.makedirs(request.out)
@@ -214,9 +211,6 @@ def main():
 
     if args.log_file:
         logging.basicConfig(filename=args.log_file, filemode='w+')
-        # Setup memory profile
-    if args.mem_profile:
-        mem_profile = open(args.mem_profile,'w')
 
     config = AutoConfig.from_pretrained(
         "deploy/models/transcript",

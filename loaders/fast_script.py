@@ -23,7 +23,6 @@ from multiprocessing import Pool, cpu_count
 import subprocess
 import shutil
 import six
-import ngsim
 from Bio import bgzf, SeqIO
 
 import datasets
