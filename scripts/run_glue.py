@@ -364,24 +364,6 @@ def main():
                 cache_dir=model_args.cache_dir,
                 use_auth_token=True if model_args.use_auth_token else None,
             ).shuffle()
-        if "test" not in raw_datasets.keys():
-            logger.info("Not Testing dataset, split from validation dataset")
-            raw_datasets["test"] = load_dataset(
-                DATASET_TYPES[data_args.dataset_name],
-                data_args.dataset_config_name,
-                split=f"validation[:{data_args.test_split_percentage}%]",
-                data_dir=data_args.dataset_dir,
-                cache_dir=model_args.cache_dir,
-                use_auth_token=True if model_args.use_auth_token else None,
-            )
-            raw_datasets["validation"] = load_dataset(
-                DATASET_TYPES[data_args.dataset_name],
-                data_args.dataset_config_name,
-                split=f"validation[{data_args.test_split_percentage}%:]",
-                data_dir=data_args.dataset_dir,
-                cache_dir=model_args.cache_dir,
-                use_auth_token=True if model_args.use_auth_token else None,
-            )
     else:
         # Loading a dataset from your local files.
         # CSV/JSON training and evaluation files are needed.
@@ -427,7 +409,7 @@ def main():
     if data_args.task_name is not None:
         if data_args.task_name == "trc1":
             label_list = raw_datasets["train"].features["label"].names
-        elif data_args.dataset_config_name.startswith('tata'):
+        elif data_args.dataset_config_name.startswith('tata') or data_args.dataset_config_name.startswith('nontata'):
             label_list = raw_datasets["train"].features["label"].names
         else:
             label_list = raw_datasets["train"].features["label_1"].names
@@ -513,7 +495,7 @@ def main():
         )
     max_seq_length = min(data_args.max_seq_length, tokenizer.model_max_length)
 
-    if data_args.dataset_config_name.startswith('tata'):
+    if data_args.dataset_config_name.startswith('tata') or data_args.dataset_config_name.startswith('nontata'):
         def preprocess_function(examples):
             # Tokenize the sequences 
             kmer_example = [" ".join(_kmer_split(model_args.model_ksize, s)) for s in examples[seq_1_key]]
@@ -548,14 +530,6 @@ def main():
         if data_args.max_eval_samples is not None:
             max_eval_samples = min(len(eval_dataset), data_args.max_eval_samples)
             eval_dataset = eval_dataset.shuffle().select(range(max_eval_samples))
-
-    if training_args.do_predict or data_args.task_name is not None or data_args.test_file is not None:
-        if "test" not in raw_datasets and "test_matched" not in raw_datasets:
-            raise ValueError("--do_predict requires a test dataset")
-        predict_dataset = raw_datasets["test_matched" if data_args.task_name == "mnli" else "test"]
-        if data_args.max_predict_samples is not None:
-            max_predict_samples = min(len(predict_dataset), data_args.max_predict_samples)
-            predict_dataset = predict_dataset.select(range(max_predict_samples))
 
     os.system("clear")
     # Get the metric function

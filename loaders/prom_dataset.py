@@ -167,7 +167,8 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
                 features["label"] = datasets.features.ClassLabel(names=self.config.label_classes)
             else:
                 features["label"] = datasets.Value("float32")
-        else self.config.name.startswith("notata"):  # This is the name of the configuration selected in BUILDER_CONFIGS above
+        else: 
+            # self.config.name.startswith("nontata"):  # This is the name of the configuration selected in BUILDER_CONFIGS above
             features = datasets.Features(
                 {
                     "sequence": datasets.Value("string"),
@@ -209,7 +210,7 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
             ),
         ]
 
-    def _neggen(seq, num_part=20, keep=8, max_class=4):
+    def _neggen(self, seq, num_part=20, keep=8, max_class=4):
         length = len(seq)
         # get part
         part_len = length // num_part
@@ -238,9 +239,9 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
             for i, seq in enumerate(SeqIO.parse(fa_file, 'fasta')):
                 yield 2*i, {
                         "sequence": seq.seq,
-                        "label": seq.description, 
+                        "label": "promoter",
                         }
                 yield 2*i + 1, {
-                        "sequence": _neggen(seq.seq),
-                        "label": seq.description, 
+                        "sequence": self._neggen(seq.seq),
+                        "label": "nonpromoter",
                         }
