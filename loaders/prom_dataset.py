@@ -128,6 +128,13 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
             label_classes=_LABELS["labels"],
             label_column="label",
             num_seq=None),
+        ReadsConfig(name="nontata_prom", 
+            version=VERSION, 
+            description="Random in blocks", 
+            seq_names=["sequence"], 
+            label_classes=_LABELS["labels"],
+            label_column="label",
+            num_seq=None),
     ]
 
     def _preprocessing(self, dl_manager):
