@@ -55,8 +55,8 @@ _URLS = {
 }
 
 _FILES = {
-        "tata_train" : "hs_pos_TATA.fq",
-        "nontata_train" : "hs_pos_nonTATA.fq",
+        "tata_train" : "hs_pos_TATA.fa",
+        "nontata_train" : "hs_pos_nonTATA.fa",
 }
 
 _LABELS = {
