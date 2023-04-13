@@ -68,20 +68,23 @@ require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/text
 task_to_keys = {
     "trc1": ("read_1", None),
     "trc2": ("read_1", "read_2"),
+    "tsc1": ("sequence", None),
 }
 
 task_to_labelkeys = {
     "trc1": ("label_1", None),
     "trc2": ("label_1", "label_2"),
+    "tsc1": ("label", None),
 }
 
 task_to_glue = {
     "trc1": "sst2",
     "trc2": "sst2",
+    "tsc1": "sst2",
 }
 
 logger = logging.getLogger(__name__)
-DATASET_TYPES = {"rds": "loaders/reads_script.py", "ngs": "loaders/ngs_script.py", "wtr": "loaders/trns_script.py"}
+DATASET_TYPES = {"prom": "loaders/prom_dataset.py", "rds": "loaders/reads_script.py", "ngs": "loaders/ngs_script.py", "wtr": "loaders/trns_script.py"}
 
 def _kmer_split(k: int, sequence: str) -> List[str]:
     return [sequence[j: j + k] for j in range(len(sequence) - k + 1)]
@@ -424,7 +427,7 @@ def main():
     if data_args.task_name is not None:
         if data_args.task_name == "trc1":
             label_list = raw_datasets["train"].features["label"].names
-        elif not data_args.dataset_config_name.startswith('paired'):
+        elif data_args.dataset_config_name.startswith('tata'):
             label_list = raw_datasets["train"].features["label"].names
         else:
             label_list = raw_datasets["train"].features["label_1"].names
@@ -476,18 +479,18 @@ def main():
         column_names = raw_datasets["validation"].column_names
     if "label" in column_names: column_names.remove("label")
     if data_args.task_name is not None:
-        read_1_key, read_2_key = task_to_keys[data_args.task_name]
+        seq_1_key, seq_2_key = task_to_keys[data_args.task_name]
         label_1_key, label_2_key = task_to_labelkeys[data_args.task_name]
     else:
         # Again, we try to have some nice defaults but don't hesitate to tweak to your use case.
         non_label_column_names = [name for name in raw_datasets["train"].column_names if "label" not in name]
         if "read_1" in non_label_column_names and "read_2" in non_label_column_names:
-            read_1_key, read_2_key = "read_1", "read_2"
+            seq_1_key, seq_2_key = "read_1", "read_2"
         else:
             if len(non_label_column_names) >= 2:
-                read_1_key, read_2_key = non_label_column_names[:2]
+                seq_1_key, seq_2_key = non_label_column_names[:2]
             else:
-                read_1_key, read_2_key = non_label_column_names[0], None
+                seq_1_key, seq_2_key = non_label_column_names[0], None
 
     # Padding strategy
     if data_args.pad_to_max_length:
@@ -510,32 +513,16 @@ def main():
         )
     max_seq_length = min(data_args.max_seq_length, tokenizer.model_max_length)
 
-    if data_args.dataset_config_name.startswith('single'):
+    if data_args.dataset_config_name.startswith('tata'):
         def preprocess_function(examples):
-            # Tokenize the reads
-            kmer_example = [" ".join(
-                [" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), z)]) 
-                            for z in zip(examples[read_1_key],  repeat(""))]
-            result = tokenizer(kmer_example, padding=padding, max_length=max_seq_length, truncation=True)
-            return result
-    elif data_args.dataset_config_name.startswith('multi'):
-        def preprocess_function(examples):
-            # Tokenize the reads
-            kmer_example = [" ".join(
-                [" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), z)]) 
-                            for z in zip(examples[read_1_key],  examples[read_2_key])]
-            result = tokenizer(kmer_example, padding=padding, max_length=max_seq_length, truncation=True)
-            return result
+            # Tokenize the sequences 
+            kmer_example = [" ".join(_kmer_split(model_args.model_ksize, s)) for s in examples[seq_1_key]]
+            return tokenizer(kmer_example, padding=padding, max_length=max_seq_length, truncation=True)
     else:
         def preprocess_function(examples):
-            # Tokenize the reads
-            kmer_example = [" ".join(
-                [" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), z)]) 
-                            for z in zip(examples[read_1_key],  examples[read_2_key])]
-            result = tokenizer(kmer_example, padding=padding, max_length=max_seq_length, truncation=True)
-            # Map labels to ids
-            result["label"] = [l1*l2 if l1 != -1 and l2 != -1 else -1 for l1, l2 in zip(examples[label_1_key],  examples[label_2_key])]
-            return result
+            # Tokenize the sequences 
+            kmer_example = [" ".join(_kmer_split(model_args.model_ksize, s)) for s in examples[seq_1_key]]
+            return tokenizer(kmer_example, padding=padding, max_length=max_seq_length, truncation=True)
 
     with training_args.main_process_first(desc="dataset map pre-processing"):
         raw_datasets = raw_datasets.map(
