@@ -217,7 +217,9 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
             ),
         ]
 
-    def _neggen(self, seq, num_part=20, keep=8, max_class=4):
+    def _neggen(self, seq, num_part=20, keep=8,  prob=1.0):
+        if random.random() < (1.0-prob):
+            return seq
         length = len(seq)
         # get part
         part_len = length // num_part
@@ -234,7 +236,7 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
             if it in keep_parts:
                 outpro.extend(pro_part)
             else:
-                pro_part = random.choices(np.arange(max_class), k=len(pro_part))
+                pro_part = random.choices(['A', 'C', 'G', 'T'], k=len(pro_part))
                 outpro.extend(pro_part)
         return outpro
 
