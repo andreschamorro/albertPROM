@@ -21,7 +21,7 @@
   "net_structure_type": 0,
   "num_attention_heads": 12,
   "num_hidden_groups": 1,
-  "num_hidden_layers": 6,
+  "num_hidden_layers": 12,
   "num_memory_blocks": 0,
   "pad_token_id": 0,
   "type_vocab_size": 2,

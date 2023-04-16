@@ -73,7 +73,7 @@ require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/lang
 logger = logging.getLogger(__name__)
 MODEL_CONFIG_CLASSES = list(MODEL_FOR_MASKED_LM_MAPPING.keys())
 MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
-DATASET_TYPES = {"rds": "loaders/reads_script.py", "ngs": "loaders/ngs_script.py", "wtr": "loaders/trns_script.py"}
+DATASET_TYPES = {"prom": "loaders/prom_dataset.py", "rds": "loaders/reads_script.py", "ngs": "loaders/ngs_script.py", "wtr": "loaders/trns_script.py"}
 SPECIAL_DATASET_CONFIG = {
         "ngs": {'num_read': 0, 'x_fold': 5, 'len_r': 150, 'len_l': 150, 'std_dev': 50, 'dist': 500}}
 
@@ -442,7 +442,7 @@ def main():
         if data_args.dataset_config_name.endswith('_single'):
 
             def tokenize_function(examples):
-                kmer_example = [" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), examples['read_1'])]
+                kmer_example = [" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), examples['sequence'])]
                 return tokenizer(
                     kmer_example,
                     padding=padding,
@@ -467,8 +467,8 @@ def main():
             # We use `return_special_tokens_mask=True` because DataCollatorForLanguageModeling (see below) is more
             # efficient when it receives the `special_tokens_mask`.
             def tokenize_function(examples):
-                kmer_example = [
-                    [" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), z)]
+                kmer_example = [" ".join(
+                    [" ".join(kr) for kr in map(lambda r: _kmer_split(model_args.model_ksize, r), z)])
                                 for z in zip(*[examples[fn] for fn in features_names])]
                 return tokenizer(
                     kmer_example,

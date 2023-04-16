@@ -125,6 +125,7 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
             version=VERSION, 
             description="Random in blocks", 
             seq_names=["sequence"], 
+            label_classes=_LABELS["labels"],
             label_column="label",
             num_seq=None),
         ReadsConfig(name="tata_prom", 
@@ -182,6 +183,10 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
                     # These are the features of your dataset like images, labels ...
                 }
             )
+            if self.config.label_classes:
+                features["label"] = datasets.features.ClassLabel(names=self.config.label_classes)
+            else:
+                features["label"] = datasets.Value("float32")
         elif self.config.name.startswith("tata"):  # This is the name of the configuration selected in BUILDER_CONFIGS above
             features = datasets.Features(
                 {
@@ -269,7 +274,7 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
                 for i, seq in enumerate(SeqIO.parse(fa_file, 'fasta')):
                     yield i, {
                             "sequence": seq.seq,
-                            "label": "sliding",
+                            "label": "promoter",
                             }
             with open(fasta, 'r') as fa_file:
                 for i, seq in enumerate(SeqIO.parse(fa_file, 'fasta')):

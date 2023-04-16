@@ -464,7 +464,7 @@ def main():
                     tokenize_function,
                     batched=True,
                     num_proc=data_args.preprocessing_num_workers,
-                    remove_columns=features_names,
+                    remove_columns=column_names,
                     load_from_cache_file=not data_args.overwrite_cache,
                     desc="Running tokenizer on dataset single read",
                 )
@@ -544,8 +544,6 @@ def main():
                 load_from_cache_file=not data_args.overwrite_cache,
                 desc=f"Grouping texts in chunks of {max_seq_length}",
             )
-
-    os.system("clear")
 
     if training_args.do_train:
         if "train" not in tokenized_datasets:
