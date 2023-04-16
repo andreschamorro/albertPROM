@@ -23,7 +23,6 @@ from multiprocessing import Pool, cpu_count
 import subprocess
 import shutil
 import six
-import ngsim
 import itertools
 import random
 import numpy as np
@@ -55,6 +54,7 @@ _URLS = {
 }
 
 _FILES = {
+        "sliding_train" : "transcript.sliding.fa",
         "tata_train" : "hs_pos_TATA.fa",
         "nontata_train" : "hs_pos_nonTATA.fa",
 }
@@ -125,6 +125,11 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
             version=VERSION, 
             description="Random in blocks", 
             seq_names=["sequence"], 
+            num_seq=None),
+        ReadsConfig(name="tata_prom", 
+            version=VERSION, 
+            description="Random in blocks", 
+            seq_names=["sequence"], 
             label_classes=_LABELS["labels"],
             label_column="label",
             num_seq=None),
@@ -146,7 +151,13 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
         # By default the archives will be extracted and a path to a cached folder where they are extracted is returned instead of the archive
 
         data_dir = os.path.abspath(os.path.expanduser(dl_manager.manual_dir))
-        if self.config.name.startswith('tata'):
+        if self.config.name.startswith('sliding'):
+            fasta_train = os.path.join(data_dir, _FILES['tata_train'])
+            if not os.path.exists(fasta_train):
+                raise FileNotFoundError(
+                    f"{fasta_train} does not exist. Make sure you insert a manual dir that includes the file name {file}. Manual download instructions: {self.manual_download_instructions})"
+                )
+        elif self.config.name.startswith('tata'):
             fasta_train = os.path.join(data_dir, _FILES['tata_train'])
             if not os.path.exists(fasta_train):
                 raise FileNotFoundError(
@@ -162,7 +173,14 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
         return fasta_train
 
     def _info(self):
-        if self.config.name.startswith("tata"):  # This is the name of the configuration selected in BUILDER_CONFIGS above
+        if self.config.name.startswith("sliding"):  # This is the name of the configuration selected in BUILDER_CONFIGS above
+            features = datasets.Features(
+                {
+                    "sequence": datasets.Value("string"),
+                    # These are the features of your dataset like images, labels ...
+                }
+            )
+        elif self.config.name.startswith("tata"):  # This is the name of the configuration selected in BUILDER_CONFIGS above
             features = datasets.Features(
                 {
                     "sequence": datasets.Value("string"),
@@ -238,19 +256,23 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
             else:
                 pro_part = random.choices(['A', 'C', 'G', 'T'], k=len(pro_part))
                 outpro.extend(pro_part)
-        return outpro
+        return "".join(outpro)
 
     # method parameters are unpacked from `gen_kwargs` as given in `_split_generators` "block_size": [int(bs) for bs in row.blockSizes.split(',')],
     def _generate_examples(self, fasta, split):
         # TODO: This method handles input defined in _split_generators to yield (key, example) tuples from the dataset.
         # The `key` is for legacy reasons (tfds) and is not important in itself, but must be unique for each example.
-        with open(fasta, 'r') as fa_file:
-            for i, seq in enumerate(SeqIO.parse(fa_file, 'fasta')):
-                yield 2*i, {
-                        "sequence": seq.seq,
-                        "label": "promoter",
-                        }
-                yield 2*i + 1, {
-                        "sequence": self._neggen(seq.seq),
-                        "label": "nonpromoter",
-                        }
+        if self.config.name.startswith('sliding'):
+            with open(fasta, 'r') as fa_file:
+                for i, seq in enumerate(SeqIO.parse(fa_file, 'fasta')):
+                    yield i, {"sequence": seq.seq,}
+            with open(fasta, 'r') as fa_file:
+                for i, seq in enumerate(SeqIO.parse(fa_file, 'fasta')):
+                    yield 2*i, {
+                            "sequence": seq.seq,
+                            "label": "promoter",
+                            }
+                    yield 2*i + 1, {
+                            "sequence": self._neggen(seq.seq),
+                            "label": "nonpromoter",
+                            }

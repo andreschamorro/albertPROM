@@ -424,10 +424,7 @@ def main():
         column_names = raw_datasets["train"].column_names
     else:
         column_names = raw_datasets["validation"].column_names
-    if data_args.dataset_name == "ngs" or data_args.dataset_name == "rds" :
-        features_names = [col for col in column_names if col.startswith('read')]
-    else:
-        features_names = ["sequence"] if "sequence" in column_names else [column_names[0]]
+    features_names = ["sequence"] if "sequence" in column_names else [column_names[0]]
 
     if data_args.max_seq_length is None:
         max_seq_length = tokenizer.model_max_length
@@ -445,13 +442,13 @@ def main():
             )
         max_seq_length = min(data_args.max_seq_length, tokenizer.model_max_length)
     kmer_split = partial(_kmer_split_mlm, mask_token=tokenizer.mask_token, mlm_probability=data_args.mlm_probability) if data_args.pre_mlm else partial(_kmer_split)
-    if data_args.dataset_name == "ngs" or data_args.dataset_name == "rds" :
+    if data_args.dataset_name == "prom":
         # TODO group for reads > max_length
         padding = "max_length" if data_args.pad_to_max_length else False
-        if data_args.dataset_config_name.startswith('single'):
+        if data_args.dataset_config_name.startswith('sliding'):
 
             def tokenize_function(examples):
-                kmer_example = [" ".join(kr) for kr in map(lambda r: kmer_split(model_args.model_ksize, r), examples['read_1'])]
+                kmer_example = [" ".join(kr) for kr in map(lambda r: kmer_split(model_args.model_ksize, r), examples['sequence'])]
                 return tokenizer(
                     kmer_example,
                     padding=padding,
