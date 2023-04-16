@@ -121,10 +121,11 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
     # data = datasets.load_dataset('my_dataset', 'first_domain')
     # data = datasets.load_dataset('my_dataset', 'second_domain')
     BUILDER_CONFIGS = [
-        ReadsConfig(name="tata_prom", 
+        ReadsConfig(name="sliding_prom", 
             version=VERSION, 
             description="Random in blocks", 
             seq_names=["sequence"], 
+            label_column="label",
             num_seq=None),
         ReadsConfig(name="tata_prom", 
             version=VERSION, 
@@ -152,7 +153,7 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
 
         data_dir = os.path.abspath(os.path.expanduser(dl_manager.manual_dir))
         if self.config.name.startswith('sliding'):
-            fasta_train = os.path.join(data_dir, _FILES['tata_train'])
+            fasta_train = os.path.join(data_dir, _FILES['sliding_train'])
             if not os.path.exists(fasta_train):
                 raise FileNotFoundError(
                     f"{fasta_train} does not exist. Make sure you insert a manual dir that includes the file name {file}. Manual download instructions: {self.manual_download_instructions})"
@@ -177,6 +178,7 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
             features = datasets.Features(
                 {
                     "sequence": datasets.Value("string"),
+                    "label": datasets.Value("string"),
                     # These are the features of your dataset like images, labels ...
                 }
             )
@@ -265,7 +267,10 @@ class ReadsDataset(datasets.GeneratorBasedBuilder):
         if self.config.name.startswith('sliding'):
             with open(fasta, 'r') as fa_file:
                 for i, seq in enumerate(SeqIO.parse(fa_file, 'fasta')):
-                    yield i, {"sequence": seq.seq,}
+                    yield i, {
+                            "sequence": seq.seq,
+                            "label": "sliding",
+                            }
             with open(fasta, 'r') as fa_file:
                 for i, seq in enumerate(SeqIO.parse(fa_file, 'fasta')):
                     yield 2*i, {
